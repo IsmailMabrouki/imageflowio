@@ -55,6 +55,7 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
 - Roadmap: `docs/ROADMAP.md`
 - Progress: `docs/PROGRESS.md`
 - Examples: `examples/README.md`
+- Developer Guide: `docs/DEVELOPMENT.md`
 
 ### Example config
 
