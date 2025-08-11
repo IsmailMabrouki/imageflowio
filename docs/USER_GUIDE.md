@@ -64,7 +64,7 @@ Key sections:
 - `execution`: `backend: auto|cpu|gpu` (auto uses best available), `threads`
 - `preprocessing`: `resize`, `normalize` (mean/std), `format` (dtype, channels, channelOrder)
 - `inference`: `tiling` (planned)
-- `postprocessing`: `resizeTo`, `activation`, `clamp`, `denormalize`, `colorMap` (grayscale, viridis, magma, plasma), `toneMap` (preview)
+- `postprocessing`: `resizeTo`, `activation`, `clamp`, `denormalize`, `colorMap` (grayscale, viridis, magma, plasma), `paletteMap` (preset/inline/file + optional outline), `toneMap` (luminance-based)
 - `output`: `save` (png/jpeg/webp/tiff), `writeMeta` (timings and sizes), `saveRaw` (NPY)
 
 ## Backends
@@ -85,6 +85,8 @@ Key sections:
 ## Examples
 
 - See `examples/README.md`
+  - `examples/palette-file.json`: palette from JSON + raw BIN
+  - `examples/float32-raw.json`: save NPY as float32
 - Try without a model:
 
 ```
@@ -95,6 +97,7 @@ imageflowio --config examples/basic-noop.json --backend noop --input examples/im
 
 - "Failed to load onnxruntime-node": install it with `npm install onnxruntime-node` and retry
 - Schema errors: ensure `"$schema": "./config.schema.json"` and fields match `docs/CONFIG.md`
+  - If you use `saveRaw.dtype: "float32"`, NPY will be normalized to [0,1]; BIN always writes raw bytes.
 - Windows: if `sharp` install fails, ensure build tools are present or use prebuilt binaries (Node >= 18)
 - Node engine: ensure `node -v` is >= 18
 

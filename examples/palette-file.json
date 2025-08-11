@@ -1,0 +1,21 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "noop.onnx" },
+  "input": { "type": "image", "source": "./examples/images/sample.png" },
+  "postprocessing": {
+    "paletteMap": {
+      "apply": true,
+      "source": "channel",
+      "channel": 0,
+      "palette": { "mode": "file", "file": "./examples/palette.json" }
+    }
+  },
+  "output": {
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" },
+    "saveRaw": {
+      "apply": true,
+      "format": "bin",
+      "path": "./examples/outputs/raw"
+    }
+  }
+}

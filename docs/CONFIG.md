@@ -227,7 +227,7 @@ Notes:
   - **format**: "png" | "jpeg" | "webp" | "tiff" — File format.
   - **bitDepth**: 8 | 16 | 32 — Bit depth for output where supported (e.g., TIFF/PNG).
   - **colorSpace**: "srgb" | "linear" — Output color space metadata.
-  - **linearToSRGB**: boolean — Convert linear output to sRGB for display.
+  - **linearToSRGB**: boolean — Convert linear output to sRGB (gamma 2.4, sRGB companding) before save.
   - **splitChannels**: boolean — Save each channel to a separate file in addition to the combined image.
   - **channelNames**: string[] — Names to use when splitting channels (defaults to `C0`, `C1`, ...).
   - **filename**: string — Pattern supporting tokens like `{model}`, `{timestamp}`, `{index}`.
@@ -237,7 +237,8 @@ Notes:
   - **jsonPath**: string — Destination path for metadata JSON.
 - **saveRaw**:
   - **apply**: boolean — Persist raw tensor output.
-  - **format**: "npy" | "npz" | "bin" — Raw tensor file format.
+  - **format**: "npy" | "bin" — Raw tensor file format (NPZ planned).
+  - **dtype**: "uint8" | "float32" — Data type when writing NPY (BIN is always raw bytes of the saved image).
   - **path**: string — Directory to store raw outputs.
 
 ### custom
@@ -254,7 +255,7 @@ Notes:
 ### visualization
 
 - **apply**: boolean — Enable visualization output artifacts.
-- **type**: "sideBySide" | "overlay" | "heatmap" | "difference" — Visualization mode.
+- **type**: "sideBySide" | "overlay" | "heatmap" | "difference" — Visualization mode (sideBySide and difference implemented).
 - **outputPath**: string — Directory to write visualization outputs.
 
 ---

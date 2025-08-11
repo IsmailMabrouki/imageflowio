@@ -186,7 +186,7 @@ interface InferenceOutput {
     data: Float32Array;
     width: number;
     height: number;
-    channels: 1 | 2 | 3 | 4;
+    channels: number;
 }
 interface InferenceBackend {
     name: string;

@@ -125,6 +125,14 @@ imageflowio --config examples/basic-noop.json --backend noop --input examples/im
   - Help: `imageflowio --help`
   - Validate: `imageflowio --config config.json --validate-only`
 
+### Releasing
+
+- Patch: `npm version patch -m "chore: release v%s" && git push origin main --follow-tags`
+- Minor: `npm version minor -m "chore: release v%s" && git push origin main --follow-tags`
+- Major: `npm version major -m "chore: release v%s" && git push origin main --follow-tags`
+
+Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` secret. See `docs/DEVELOPMENT.md`.
+
 ### Feature support matrix (selected)
 
 | Area           | Feature                                  | Status  |
@@ -139,6 +147,7 @@ imageflowio --config examples/basic-noop.json --backend noop --input examples/im
 | Output         | Split channels, raw NPY, metadata        | Done    |
 | CLI/DX         | Validate/run, Ajv 2020-12, JSON errors   | Done    |
 | Packaging/CI   | Dual build (CJS/ESM), CI matrix          | Done    |
+| Visualization  | sideBySide, difference                   | Done    |
 
 ### License
 

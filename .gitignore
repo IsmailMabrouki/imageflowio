@@ -1,12 +1,14 @@
 node_modules/
 dist/
-.env
-tmp-*/
 testoutput/
+tmp-*/
 .env
+.npmrc
 .DS_Store
 Thumbs.db
 npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
 coverage/
 .vitest/
-.log

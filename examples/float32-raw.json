@@ -1,0 +1,14 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "noop.onnx" },
+  "input": { "type": "image", "source": "./examples/images/sample.png" },
+  "output": {
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" },
+    "saveRaw": {
+      "apply": true,
+      "format": "npy",
+      "dtype": "float32",
+      "path": "./examples/outputs/raw"
+    }
+  }
+}

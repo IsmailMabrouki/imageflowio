@@ -272,6 +272,7 @@
           "properties": {
             "apply": { "type": "boolean" },
             "format": { "type": "string", "enum": ["npy", "npz", "bin"] },
+            "dtype": { "type": "string", "enum": ["uint8", "float32"] },
             "path": { "type": "string" }
           }
         },

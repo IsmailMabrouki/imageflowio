@@ -111,10 +111,20 @@ export class ImageFlowPipeline {
           }
         }
       }
+      // Apply channel order for model input (float path) if requested
+      if (pp?.format?.channelOrder === "bgr" && (info.channels ?? 3) >= 3) {
+        for (let i = 0; i < width * height; i++) {
+          const base = i * channels;
+          const r = floatData[base + 0];
+          const b = floatData[base + 2];
+          floatData[base + 0] = b;
+          floatData[base + 2] = r;
+        }
+      }
       inputTensor = { data: floatData, width, height, channels };
     }
-    // Channel order conversion (RGB <-> BGR) for visualization
-    if (pp?.format?.channelOrder === "bgr") {
+    // Channel order conversion on uint8 path only (no float tensor)
+    if (!needFloatTensor && pp?.format?.channelOrder === "bgr") {
       const { data, info } = await work
         .clone()
         .raw()
@@ -150,6 +160,23 @@ export class ImageFlowPipeline {
       let backend: InferenceBackend =
         backendChoice === "onnx" ? new OnnxBackend() : new NoopBackend();
       await backend.loadModel(this.config.model.path);
+
+      // Optional warmup runs
+      const warmupRuns = Math.max(0, this.config.execution?.warmupRuns ?? 0);
+      if (warmupRuns > 0 && inputTensor) {
+        try {
+          for (let i = 0; i < warmupRuns; i++) {
+            await backend.infer({
+              data: inputTensor.data,
+              width: inputTensor.width,
+              height: inputTensor.height,
+              channels: inputTensor.channels,
+            });
+          }
+        } catch {
+          // ignore warmup errors in preview
+        }
+      }
 
       const tiling = this.config.inference?.tiling;
       const doTiling = !!tiling?.apply;
@@ -192,6 +219,16 @@ export class ImageFlowPipeline {
                 tileFloat[i * ch + c] = applyNorm
                   ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
                   : v;
+              }
+            }
+            // Apply channel order for model input (tile float path)
+            if (pp?.format?.channelOrder === "bgr" && ch >= 3) {
+              for (let i = 0; i < tw * th; i++) {
+                const base = i * ch;
+                const r = tileFloat[base + 0];
+                const b = tileFloat[base + 2];
+                tileFloat[base + 0] = b;
+                tileFloat[base + 2] = r;
               }
             }
             const tileOut = await backend.infer({
@@ -248,7 +285,11 @@ export class ImageFlowPipeline {
           raw: {
             width: result.width,
             height: result.height,
-            channels: result.channels,
+            channels: Math.max(1, Math.min(4, result.channels)) as
+              | 1
+              | 2
+              | 3
+              | 4,
           },
         });
       }
@@ -301,7 +342,7 @@ export class ImageFlowPipeline {
       });
     }
 
-    // Tone mapping (preview): apply on 8-bit data per channel
+    // Tone mapping: luminance-based operator preserving chroma
     if (post?.toneMap?.apply) {
       const method = post.toneMap.method ?? "reinhard";
       const exposure = post.toneMap.exposure ?? 0;
@@ -310,30 +351,60 @@ export class ImageFlowPipeline {
         .clone()
         .raw()
         .toBuffer({ resolveWithObject: true });
+      const width = info.width ?? 0;
+      const height = info.height ?? 0;
       const channels = info.channels ?? 3;
-      const len = (info.width ?? 0) * (info.height ?? 0) * channels;
       const expMul = Math.pow(2, exposure);
-      for (let idx = 0; idx < len; idx++) {
-        let v = (data[idx] / 255) * expMul;
-        // Apply operator
-        if (method === "aces" || method === "filmic") {
-          const a = 2.51,
-            b = 0.03,
-            c = 2.43,
-            d = 0.59,
-            e = 0.14;
-          v = (v * (a * v + b)) / (v * (c * v + d) + e);
-        } else {
-          // reinhard
-          v = v / (1 + v);
+      const eps = 1e-6;
+      if (channels >= 3) {
+        for (let i = 0; i < width * height; i++) {
+          const j = i * channels;
+          const r = data[j + 0] / 255;
+          const g = data[j + 1] / 255;
+          const b = data[j + 2] / 255;
+          let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          y *= expMul;
+          let yMapped: number;
+          if (method === "aces" || method === "filmic") {
+            const a = 2.51,
+              b1 = 0.03,
+              c = 2.43,
+              d = 0.59,
+              e = 0.14;
+            yMapped = (y * (a * y + b1)) / (y * (c * y + d) + e);
+          } else {
+            yMapped = y / (1 + y);
+          }
+          if (gamma > 0)
+            yMapped = Math.pow(Math.max(0, Math.min(1, yMapped)), 1 / gamma);
+          const scale = y > eps ? yMapped / y : 0;
+          const rn = Math.max(0, Math.min(1, r * scale));
+          const gn = Math.max(0, Math.min(1, g * scale));
+          const bn = Math.max(0, Math.min(1, b * scale));
+          data[j + 0] = Math.round(rn * 255);
+          data[j + 1] = Math.round(gn * 255);
+          data[j + 2] = Math.round(bn * 255);
         }
-        // gamma
-        if (gamma > 0) v = Math.pow(Math.max(0, Math.min(1, v)), 1 / gamma);
-        data[idx] = Math.max(0, Math.min(255, Math.round(v * 255)));
+      } else {
+        // Single-channel
+        for (let i = 0; i < width * height; i++) {
+          const v0 = (data[i] / 255) * expMul;
+          let v = v0;
+          if (method === "aces" || method === "filmic") {
+            const a = 2.51,
+              b1 = 0.03,
+              c = 2.43,
+              d = 0.59,
+              e = 0.14;
+            v = (v * (a * v + b1)) / (v * (c * v + d) + e);
+          } else {
+            v = v / (1 + v);
+          }
+          if (gamma > 0) v = Math.pow(Math.max(0, Math.min(1, v)), 1 / gamma);
+          data[i] = Math.max(0, Math.min(255, Math.round(v * 255)));
+        }
       }
-      out = sharp(data, {
-        raw: { width: info.width ?? 0, height: info.height ?? 0, channels },
-      });
+      out = sharp(data, { raw: { width, height, channels } });
     }
 
     // Color map: replicate a selected channel to RGB for visualization
@@ -379,20 +450,27 @@ export class ImageFlowPipeline {
           return getPresetPalette(p.preset ?? "pascal_voc");
         if (p.mode === "inline" && p.inline && p.inline.length > 0)
           return p.inline as any;
-        // file mode not implemented in preview
+        if (p.mode === "file" && p.file) {
+          try {
+            const abs = path.resolve(process.cwd(), p.file);
+            if (fs.existsSync(abs)) {
+              const arr = JSON.parse(fs.readFileSync(abs, "utf-8"));
+              if (Array.isArray(arr) && arr.length > 0) return arr as any;
+            }
+          } catch {}
+          return getPresetPalette("pascal_voc");
+        }
         return getPresetPalette("pascal_voc");
       })();
-      const rgb = Buffer.alloc(width * height * 3);
+      const classIdx = new Uint16Array(width * height);
       for (let i = 0; i < width * height; i++) {
-        let cls = 0;
         if (source === "channel" && post.paletteMap?.channel != null) {
           const ch = Math.max(
             0,
             Math.min(channels - 1, post.paletteMap.channel)
           );
-          cls = data[i * channels + ch];
+          classIdx[i] = data[i * channels + ch];
         } else if (channels > 1) {
-          // argmax across channels
           let maxVal = -Infinity;
           let maxIdx = 0;
           for (let c = 0; c < channels; c++) {
@@ -402,15 +480,39 @@ export class ImageFlowPipeline {
               maxIdx = c;
             }
           }
-          cls = maxIdx;
+          classIdx[i] = maxIdx;
         } else {
-          cls = data[i];
+          classIdx[i] = data[i];
         }
-        const [r, g, b] = palette[cls % palette.length];
+      }
+      const rgb = Buffer.alloc(width * height * 3);
+      for (let i = 0; i < width * height; i++) {
+        const cls = classIdx[i] % palette.length;
+        const [r, g, b] = palette[cls];
         const j = i * 3;
         rgb[j] = r;
         rgb[j + 1] = g;
         rgb[j + 2] = b;
+      }
+      // Outline overlay (simple boundary detection)
+      if (post.paletteMap.outline?.apply) {
+        const color = post.paletteMap.outline.color ?? [255, 0, 0];
+        const thickness = Math.max(1, post.paletteMap.outline.thickness ?? 1);
+        // thickness>1 not fully implemented; treat as 1 for now
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = y * width + x;
+            const cls = classIdx[i];
+            const leftDiff = x > 0 && classIdx[i - 1] !== cls;
+            const topDiff = y > 0 && classIdx[i - width] !== cls;
+            if (leftDiff || topDiff) {
+              const j = i * 3;
+              rgb[j] = color[0];
+              rgb[j + 1] = color[1];
+              rgb[j + 2] = color[2];
+            }
+          }
+        }
       }
       out = sharp(rgb, { raw: { width, height, channels: 3 } });
     }
@@ -459,6 +561,33 @@ export class ImageFlowPipeline {
       const target = path.join(dir, filename);
 
       const format = (output.save.format ?? "png").toLowerCase();
+
+      // Optional linear -> sRGB companding before save
+      if (output.save.linearToSRGB) {
+        const { data, info } = await out
+          .clone()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        const width = info.width ?? 0;
+        const height = info.height ?? 0;
+        const channels = info.channels ?? 3;
+        const comp = Buffer.alloc(data.length);
+        const isRGBA = channels === 4;
+        for (let i = 0; i < width * height; i++) {
+          const base = i * channels;
+          const limit = isRGBA ? 3 : channels;
+          for (let c = 0; c < limit; c++) {
+            const lv = data[base + c] / 255;
+            const srgb =
+              lv <= 0.0031308
+                ? 12.92 * lv
+                : 1.055 * Math.pow(lv, 1 / 2.4) - 0.055;
+            comp[base + c] = Math.max(0, Math.min(255, Math.round(srgb * 255)));
+          }
+          if (isRGBA) comp[base + 3] = data[base + 3];
+        }
+        out = sharp(comp, { raw: { width, height, channels } });
+      }
 
       if (output.save.splitChannels) {
         const { data, info } = await out
@@ -534,6 +663,74 @@ export class ImageFlowPipeline {
           await out.toFile(target);
         }
       }
+      // Visualization (e.g., side-by-side)
+      if (this.config.visualization?.apply) {
+        const vizType = this.config.visualization.type ?? "sideBySide";
+        const vizDir = path.resolve(
+          process.cwd(),
+          this.config.visualization.outputPath || output.save.path || dir
+        );
+        if (!fs.existsSync(vizDir)) fs.mkdirSync(vizDir, { recursive: true });
+        if (vizType === "sideBySide") {
+          const outMeta = await out.metadata();
+          const w = outMeta.width ?? 0;
+          const h = outMeta.height ?? 0;
+          const leftBuf = await sharp(inputAbs, { failOn: "none" })
+            .resize({ width: w, height: h, fit: "fill" })
+            .png()
+            .toBuffer();
+          const rightBuf = await out.clone().png().toBuffer();
+          const canvas = sharp({
+            create: {
+              width: w * 2,
+              height: h,
+              channels: 4,
+              background: { r: 0, g: 0, b: 0, alpha: 0 },
+            },
+          })
+            .composite([
+              { input: leftBuf, left: 0, top: 0 },
+              { input: rightBuf, left: w, top: 0 },
+            ])
+            .png();
+          const vizName = path.parse(target).name + "_viz.png";
+          await canvas.toFile(path.join(vizDir, vizName));
+        } else if (vizType === "difference") {
+          const outMeta = await out.metadata();
+          const w = outMeta.width ?? 0;
+          const h = outMeta.height ?? 0;
+          const left = await sharp(inputAbs, { failOn: "none" })
+            .resize({ width: w, height: h, fit: "fill" })
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+          const right = await out
+            .clone()
+            .raw()
+            .toBuffer({ resolveWithObject: true });
+          const lc = left.info.channels ?? 3;
+          const rc = right.info.channels ?? 3;
+          const ch = Math.min(lc, rc, 3);
+          const diff = Buffer.alloc(w * h * 3);
+          for (let i = 0; i < w * h; i++) {
+            let acc = 0;
+            for (let c = 0; c < ch; c++) {
+              const lv = left.data[i * lc + c] || 0;
+              const rv = right.data[i * rc + c] || 0;
+              acc += Math.abs(lv - rv);
+            }
+            const val = Math.max(0, Math.min(255, Math.round(acc / ch)));
+            const j = i * 3;
+            diff[j] = val;
+            diff[j + 1] = val;
+            diff[j + 2] = val;
+          }
+          const vizName = path.parse(target).name + "_diff.png";
+          await sharp(diff, { raw: { width: w, height: h, channels: 3 } })
+            .png()
+            .toFile(path.join(vizDir, vizName));
+        }
+      }
+
       // Optionally write metadata
       if (this.config.output?.writeMeta?.apply) {
         const metaPath = this.config.output.writeMeta.jsonPath
@@ -575,17 +772,45 @@ export class ImageFlowPipeline {
           this.config.output.saveRaw.path
         );
         if (!fs.existsSync(rawDir)) fs.mkdirSync(rawDir, { recursive: true });
-        const rawPath = path.join(rawDir, path.parse(target).name + ".npy");
+        const format = (
+          this.config.output.saveRaw.format || "npy"
+        ).toLowerCase();
+        const dtype = (this.config.output.saveRaw as any).dtype || "uint8";
+        const ext = format === "bin" ? ".bin" : ".npy";
+        const rawPath = path.join(rawDir, path.parse(target).name + ext);
         const { data, info } = await out
           .clone()
           .raw()
           .toBuffer({ resolveWithObject: true });
-        writeNpy(
-          rawPath,
-          new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-          [info.height ?? 0, info.width ?? 0, info.channels ?? 3],
-          "uint8"
+        const arr = new Uint8Array(
+          data.buffer,
+          data.byteOffset,
+          data.byteLength
         );
+        if (format === "bin") {
+          fs.writeFileSync(
+            rawPath,
+            Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength)
+          );
+        } else {
+          if (dtype === "float32") {
+            const float = new Float32Array(arr.length);
+            for (let i = 0; i < arr.length; i++) float[i] = arr[i] / 255;
+            writeNpy(
+              rawPath,
+              float as unknown as Float32Array,
+              [info.height ?? 0, info.width ?? 0, info.channels ?? 3],
+              "float32"
+            );
+          } else {
+            writeNpy(
+              rawPath,
+              arr,
+              [info.height ?? 0, info.width ?? 0, info.channels ?? 3],
+              "uint8"
+            );
+          }
+        }
       }
       return { outputPath: target };
     }

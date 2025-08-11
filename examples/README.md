@@ -26,6 +26,36 @@ npm install onnxruntime-node
 imageflowio --config examples/onnx-unet.json --backend onnx --input examples/images/sample.png --output examples/outputs
 ```
 
+## palette-file.json
+
+- Demonstrates palette mapping from a JSON file and saving raw BIN output.
+
+Run:
+
+```
+imageflowio --config examples/palette-file.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
+Create `examples/palette.json` containing an array of RGB triplets, e.g.:
+
+```json
+[
+  [255, 0, 0],
+  [0, 255, 0],
+  [0, 0, 255]
+]
+```
+
+## float32-raw.json
+
+- Demonstrates saving raw NPY with `dtype: "float32"`.
+
+Run:
+
+```
+imageflowio --config examples/float32-raw.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
 Notes:
 
 - You can override input/output at runtime with `--input` and `--output`.
