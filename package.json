@@ -1,0 +1,25 @@
+{
+  "name": "imageflowio",
+  "version": "1.0.0",
+  "description": "A configurable image preprocessing and inference pipeline library",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "image",
+    "pipeline",
+    "preprocessing",
+    "inference",
+    "tensorflow",
+    "typescript"
+  ],
+  "author": "Ismail Mabrouki",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "typescript": "^5.1.3"
+  }
+}
