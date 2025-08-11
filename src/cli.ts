@@ -2,6 +2,17 @@
 import fs from "fs";
 import path from "path";
 import { ImageFlowPipeline } from "./pipeline";
+import { ConfigValidationError } from "./errors";
+
+function getHereDir(): string {
+  try {
+    const scriptPath = process.argv[1];
+    if (scriptPath) return path.dirname(path.resolve(scriptPath));
+  } catch {}
+  // @ts-ignore __dirname exists in CJS
+  if (typeof __dirname !== "undefined") return __dirname as unknown as string;
+  return process.cwd();
+}
 
 type CliOptions = {
   configPath: string;
@@ -12,6 +23,10 @@ type CliOptions = {
   inputOverride?: string;
   outputOverride?: string;
   printSchema: boolean;
+  backend?: "auto" | "onnx" | "noop";
+  threads?: number | "auto";
+  jsonErrors?: boolean;
+  logFile?: string;
   help: boolean;
 };
 
@@ -23,6 +38,10 @@ function parseArgs(argv: string[]): CliOptions {
     version: false,
     dryRun: false,
     printSchema: false,
+    backend: undefined,
+    threads: undefined,
+    jsonErrors: false,
+    logFile: undefined,
     help: false,
   };
 
@@ -35,7 +54,27 @@ function parseArgs(argv: string[]): CliOptions {
     else if (token === "--verbose" || token === "-v") defaults.verbose = true;
     else if (token === "--dry-run") defaults.dryRun = true;
     else if (token === "--print-schema") defaults.printSchema = true;
-    else if (token.startsWith("--input="))
+    else if (token.startsWith("--backend=")) {
+      const val = token.split("=")[1] as any;
+      if (val === "auto" || val === "onnx" || val === "noop")
+        defaults.backend = val;
+    } else if (token === "--backend") {
+      const val = args.shift() as any;
+      if (val === "auto" || val === "onnx" || val === "noop")
+        defaults.backend = val;
+    } else if (token.startsWith("--threads=")) {
+      const val = token.split("=")[1];
+      defaults.threads = val === "auto" ? "auto" : Number(val);
+    } else if (token === "--threads") {
+      const val = args.shift();
+      if (val) defaults.threads = val === "auto" ? "auto" : Number(val);
+    } else if (token === "--json-errors") {
+      defaults.jsonErrors = true;
+    } else if (token.startsWith("--log-file=")) {
+      defaults.logFile = token.split("=")[1];
+    } else if (token === "--log-file") {
+      defaults.logFile = args.shift();
+    } else if (token.startsWith("--input="))
       defaults.inputOverride = token.split("=")[1];
     else if (token === "--input") defaults.inputOverride = args.shift();
     else if (token.startsWith("--output="))
@@ -65,6 +104,10 @@ Options:
   -v, --verbose        Verbose logs
       --input <path>   Override input.source
       --output <path>  Override output.save.path
+      --backend <b>    Backend override: auto|onnx|noop
+      --threads <n>    Threads override: number|auto
+      --json-errors    Print validation errors as JSON
+      --log-file <p>   Write errors/logs to file
       --dry-run        Validate and print plan only
       --print-schema   Print packaged schema path
   -h, --help           Show this help
@@ -76,36 +119,54 @@ Options:
 async function validateConfig(
   configPath: string,
   verbose: boolean
-): Promise<{ valid: boolean; errorsText?: string }> {
-  const schemaPath = path.resolve(__dirname, "../config.schema.json");
+): Promise<{ valid: boolean; errors?: any[]; errorsText?: string }> {
+  const here = getHereDir();
+  const schemaPath = path.resolve(here, "../config.schema.json");
   const existsSchema = fs.existsSync(schemaPath);
   if (!existsSchema) {
     return {
       valid: false,
+      errors: [],
       errorsText: `Schema not found at ${schemaPath}. Ensure 'config.schema.json' is packaged.`,
     };
   }
 
-  const Ajv2020 = (await import("ajv/dist/2020")).default;
+  // Use Ajv 2020 via require to avoid d.ts resolution issues in bundlers
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Ajv2020 = require("ajv/dist/2020")
+    .default as typeof import("ajv/dist/2020").default;
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
   const validate = ajv.compile(schema);
 
   if (!fs.existsSync(configPath)) {
-    return { valid: false, errorsText: `Config file not found: ${configPath}` };
+    return {
+      valid: false,
+      errors: [],
+      errorsText: `Config file not found: ${configPath}`,
+    };
   }
   const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
   const valid = validate(config) as boolean;
   if (!valid) {
-    const errorsText = ajv.errorsText(validate.errors, { separator: "\n" });
-    return { valid: false, errorsText };
+    const errors = (validate.errors || []).map((e) => ({
+      instancePath: e.instancePath,
+      schemaPath: e.schemaPath,
+      keyword: e.keyword,
+      message: e.message,
+      params: e.params,
+    }));
+    const errorsText = errors
+      .map((e) => `${e.instancePath || "/"}: ${e.message} (${e.schemaPath})`)
+      .join("\n");
+    return { valid: false, errors, errorsText };
   }
 
   if (verbose) {
     // eslint-disable-next-line no-console
     console.log(`Config '${configPath}' is valid.`);
   }
-  return { valid: true };
+  return { valid: true, errors: [] };
 }
 
 async function run(): Promise<void> {
@@ -115,27 +176,47 @@ async function run(): Promise<void> {
     process.exit(0);
   }
   if (options.version) {
-    const pkgPath = path.resolve(__dirname, "../package.json");
+    const here = getHereDir();
+    const pkgPath = path.resolve(here, "../package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     // eslint-disable-next-line no-console
     console.log(pkg.version ?? "0.0.0");
     process.exit(0);
   }
   if (options.printSchema) {
-    const schemaPath = path.resolve(__dirname, "../config.schema.json");
+    const here = getHereDir();
+    const schemaPath = path.resolve(here, "../config.schema.json");
     // eslint-disable-next-line no-console
     console.log(schemaPath);
     process.exit(0);
   }
 
-  const { valid, errorsText } = await validateConfig(
+  const { valid, errors, errorsText } = await validateConfig(
     options.configPath,
     options.verbose
   );
   if (!valid) {
-    // eslint-disable-next-line no-console
-    console.error(`Invalid config:\n${errorsText}`);
-    process.exit(1);
+    if (options.jsonErrors) {
+      const payload = { ok: false, error: "config/invalid", errors };
+      const out = JSON.stringify(payload, null, 2);
+      // eslint-disable-next-line no-console
+      console.error(out);
+      if (options.logFile) {
+        try {
+          fs.writeFileSync(options.logFile, out, "utf-8");
+        } catch {}
+      }
+    } else {
+      const out = `Invalid config\n${errorsText}`;
+      // eslint-disable-next-line no-console
+      console.error(out);
+      if (options.logFile) {
+        try {
+          fs.writeFileSync(options.logFile, out, "utf-8");
+        } catch {}
+      }
+    }
+    throw new ConfigValidationError("Invalid configuration");
   }
 
   if (options.validateOnly) {
@@ -166,7 +247,17 @@ async function run(): Promise<void> {
     process.exit(0);
   }
   const pipeline = new ImageFlowPipeline(config);
-  const result = await pipeline.run();
+  const result = await pipeline.run({
+    backend:
+      options.backend ?? (process.env.IMAGEFLOWIO_BACKEND as any) ?? "auto",
+    threads:
+      options.threads ??
+      (process.env.IMAGEFLOWIO_THREADS === "auto"
+        ? "auto"
+        : process.env.IMAGEFLOWIO_THREADS
+        ? Number(process.env.IMAGEFLOWIO_THREADS)
+        : undefined),
+  });
   if (result.outputPath) {
     // eslint-disable-next-line no-console
     console.log(`Output saved to: ${result.outputPath}`);
@@ -178,6 +269,6 @@ async function run(): Promise<void> {
 
 run().catch((err) => {
   // eslint-disable-next-line no-console
-  console.error(err);
+  console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

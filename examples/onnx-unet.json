@@ -1,0 +1,36 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "./assets/models/unet.onnx" },
+  "execution": {
+    "backend": "auto",
+    "threads": { "apply": true, "count": "auto" }
+  },
+  "input": { "type": "image", "source": "examples/images/sample.png" },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [512, 512],
+      "keepAspectRatio": true
+    },
+    "format": { "dataType": "float32", "channels": 3, "channelOrder": "rgb" },
+    "normalize": {
+      "apply": true,
+      "mean": [0.5, 0.5, 0.5],
+      "std": [0.5, 0.5, 0.5]
+    }
+  },
+  "postprocessing": {
+    "denormalize": { "apply": true, "scale": 255, "dtype": "uint8" },
+    "colorMap": { "apply": true, "mode": "viridis", "channel": 0 },
+    "resizeTo": "input",
+    "toneMap": {
+      "apply": false,
+      "method": "reinhard",
+      "exposure": 0,
+      "gamma": 2.2
+    }
+  },
+  "output": {
+    "save": { "apply": true, "path": "examples/outputs", "format": "png" }
+  }
+}

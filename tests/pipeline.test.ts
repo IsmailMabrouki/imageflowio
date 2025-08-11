@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
-import { ImageFlowPipeline } from "../dist/index.js";
+import { ImageFlowPipeline } from "../dist/index.mjs";
 
 describe("Pipeline", () => {
   it("resizes and saves an output image", async () => {
-    const tmpDir = fs.mkdtempSync(path.join(process.cwd(), "tmp-pipeline-"));
+    const outRoot = path.join(process.cwd(), "testoutput");
+    if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(outRoot, "pipeline-"));
     const inputPath = path.join(tmpDir, "input.png");
     // Create a tiny 2x2 PNG via a Buffer (black)
     const pngData = Buffer.from(
@@ -44,5 +46,52 @@ describe("Pipeline", () => {
         path.join(outDir, `${path.parse(result2.outputPath!).name}.npy`)
       )
     ).toBe(true);
+  });
+
+  it("can split channels when requested", async () => {
+    const outRoot = path.join(process.cwd(), "testoutput");
+    if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(outRoot, "pipeline-"));
+    const inputPath = path.join(tmpDir, "input.png");
+    // 2x1 RGB image with distinct channels per pixel
+    const raw = Buffer.from([
+      255,
+      0,
+      0, // red
+      0,
+      255,
+      0, // green
+    ]);
+    await (
+      await import("sharp")
+    )
+      .default(raw, {
+        raw: { width: 2, height: 1, channels: 3 },
+      })
+      .png()
+      .toFile(inputPath);
+
+    const outDir = path.join(tmpDir, "out");
+    const pipeline = new ImageFlowPipeline({
+      model: { path: "noop.onnx" },
+      input: { type: "image", source: inputPath },
+      output: {
+        save: {
+          apply: true,
+          path: outDir,
+          format: "png",
+          splitChannels: true,
+          channelNames: ["R", "G", "B"],
+          filename: "split_test.png",
+        },
+      },
+    } as any);
+
+    const res = await pipeline.run({ backend: "noop" });
+    expect(res.outputPath).toBeTruthy();
+    expect(fs.existsSync(path.join(outDir, "split_test.png"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "split_test_R.png"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "split_test_G.png"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "split_test_B.png"))).toBe(true);
   });
 });

@@ -19,7 +19,7 @@ This example demonstrates the full flexibility of the configuration for image-to
   "$schema": "./config.schema.json",
   "model": {
     "name": "unet",
-    "path": "./assets/unet.onnx"
+    "path": "./assets/models/unet.onnx"
   },
   "execution": {
     "backend": "auto",
@@ -63,7 +63,7 @@ This example demonstrates the full flexibility of the configuration for image-to
     "clamp": { "apply": true, "min": 0, "max": 1 },
     "denormalize": { "apply": true, "scale": 255, "dtype": "uint8" },
     "resizeTo": "input",
-    "colorMap": { "apply": false, "mode": "magma", "channel": 0 },
+    "colorMap": { "apply": false, "mode": "viridis", "channel": 0 },
     "toneMap": {
       "apply": false,
       "method": "aces",
@@ -173,6 +173,12 @@ All steps are optional and controlled via `apply` where applicable.
   - **padMode**: "reflect" | "edge" | "zero" — How to pad edges.
   - **blend**: "feather" | "average" | "max" — Tile blending strategy.
 
+Notes:
+
+- The current implementation performs simple averaging in overlap regions. This removes seams for identity-like models and many smooth outputs.
+- Padding modes and advanced blending are reserved for future versions; out-of-bounds areas are clipped to image bounds.
+- Tiling respects preprocessing normalization settings per tile and uses `postprocessing.denormalize.scale` for scaling float outputs back to `uint8`.
+
 ### postprocessing
 
 - **activation**:
@@ -222,8 +228,8 @@ All steps are optional and controlled via `apply` where applicable.
   - **bitDepth**: 8 | 16 | 32 — Bit depth for output where supported (e.g., TIFF/PNG).
   - **colorSpace**: "srgb" | "linear" — Output color space metadata.
   - **linearToSRGB**: boolean — Convert linear output to sRGB for display.
-  - **splitChannels**: boolean — Save each channel to a separate file.
-  - **channelNames**: string[] — Names to use when splitting channels.
+  - **splitChannels**: boolean — Save each channel to a separate file in addition to the combined image.
+  - **channelNames**: string[] — Names to use when splitting channels (defaults to `C0`, `C1`, ...).
   - **filename**: string — Pattern supporting tokens like `{model}`, `{timestamp}`, `{index}`.
   - **quality**: number — Quality for lossy formats.
 - **writeMeta**:

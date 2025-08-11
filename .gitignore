@@ -2,3 +2,11 @@ node_modules/
 dist/
 .env
 tmp-*/
+testoutput/
+.env
+.DS_Store
+Thumbs.db
+npm-debug.log*
+coverage/
+.vitest/
+.log

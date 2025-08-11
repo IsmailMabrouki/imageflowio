@@ -1,0 +1,87 @@
+# Progress: Implemented vs Planned
+
+Version: 0.0.2
+Last updated: today
+
+## Summary
+
+- Implemented a preview end-to-end path (image → preprocess → backend → postprocess → save) with a clean backend interface and an optional ONNX adapter.
+- Robust CLI with validation and execution controls; JSON Schema (2020-12) and tests are in place.
+
+## Details
+
+### Core
+
+- Implemented: config schema (2020-12), CLI validate/run, basic pipeline scaffold, backend interface, tests (CLI + pipeline + tiling), CI build+test.
+- Partial: ONNX backend (autodetect; optional dependency required at runtime).
+- Planned: richer error classes, more examples, feature support matrix in README.
+
+### CLI & DX
+
+- Implemented:
+  - Flags: `--version`, `--validate-only`, `--input`, `--output`, `--dry-run`, `--print-schema`, `--backend`, `--threads`.
+  - Env overrides: `IMAGEFLOWIO_BACKEND`, `IMAGEFLOWIO_THREADS`.
+- Planned:
+  - Structured validation errors (dataPath/schemaPath), potential separate CLI package.
+
+### Schema
+
+- Implemented:
+  - Root `$schema` allowed; tuple defs via `prefixItems`; Ajv 2020 integration.
+- Planned:
+  - Add titles/descriptions for richer IDE hints; host schema at stable `$id` URL.
+
+### Preprocessing
+
+- Implemented:
+  - Resize (fit/fill/keepAspect), center-crop, grayscale.
+  - Float path + normalize (mean/std) when requested.
+  - Channel order conversion (RGB↔BGR) for uint8 path.
+- Planned:
+  - Channel order/dtype conversions generalized for float/uint8 paths; augmentations.
+
+### Inference
+
+- Implemented:
+  - Backend interface; Noop backend; ONNX backend loader (optional `onnxruntime-node`, dynamic require).
+  - Backend selection: auto by extension or overrides (`--backend`).
+  - Tiled inference with overlap averaging.
+- Planned:
+  - Full ONNX execution examples/tests; TFJS/TFLite backend (optional WASM).
+
+### Postprocessing
+
+- Implemented:
+  - Resize-to-input/fixed size.
+  - Activation (sigmoid/tanh), clamp, denormalize (preview on 8-bit data).
+  - Color map (grayscale replication of a selected channel).
+  - Palette mapping; blend overlay with alpha.
+- Planned:
+  - Tone mapping improvements; class overlays/outline.
+
+### Output
+
+- Implemented:
+  - Save PNG/JPEG/WebP/TIFF; `quality`/`bitDepth` where supported.
+  - Metadata JSON with timings and sizes.
+  - Raw tensor export: NPY of [H,W,C] uint8 from output.
+- Planned:
+  - Split channels, color space handling (linear↔sRGB), NPZ/BIN writers.
+
+### Packaging/Release
+
+- Implemented:
+  - Optional peer dep: `onnxruntime-node`.
+- Planned:
+  - Dual ESM/CJS build with `exports` map and source maps; tag-based publishing; engines field already set (>=18).
+
+### Testing/CI
+
+- Implemented: CLI, colormaps, pipeline, tiling tests; Windows dev confirmed; test outputs under `testoutput/`.
+- Planned: matrix CI (Node 18/20; ubuntu/windows/macos), ONNX integration test behind env guard.
+
+## Next up (shortlist)
+
+1. Dual ESM/CJS build with `exports` map and source maps.
+2. Complete ONNX backend integration path and add a guarded integration test.
+3. Finish normalize/denormalize parity for float/uint8 and add true colormaps.
