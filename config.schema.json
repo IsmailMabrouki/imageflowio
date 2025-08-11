@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IsmailMabrouki/imageflowio/config.schema.json",
+  "title": "ImageFlowIO Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "path": { "type": "string" }
+      },
+      "required": ["path"]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "type": "string", "enum": ["auto", "cpu", "gpu"] },
+        "threads": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "count": {
+              "oneOf": [
+                { "type": "string", "enum": ["auto"] },
+                { "type": "integer", "minimum": 1 }
+              ]
+            }
+          }
+        },
+        "warmupRuns": { "type": "integer", "minimum": 0 },
+        "useCaching": { "type": "boolean" }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["image"] },
+        "source": { "type": "string" },
+        "batchSize": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "preprocessing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resize": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "imageSize": {
+              "$ref": "#/definitions/size2"
+            },
+            "keepAspectRatio": { "type": "boolean" },
+            "resizeMode": { "type": "string", "enum": ["fit", "fill", "crop"] }
+          }
+        },
+        "centerCrop": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "size": { "$ref": "#/definitions/size2" }
+          }
+        },
+        "normalize": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "mean": { "$ref": "#/definitions/vec3f" },
+            "std": { "$ref": "#/definitions/vec3f" }
+          }
+        },
+        "format": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dataType": {
+              "type": "string",
+              "enum": ["float32", "float16", "int8", "uint8"]
+            },
+            "channels": { "type": "integer", "minimum": 1 },
+            "channelOrder": { "type": "string", "enum": ["rgb", "bgr"] }
+          }
+        },
+        "grayscale": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "apply": { "type": "boolean" } }
+        },
+        "augmentations": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "methods": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["flip", "rotate", "colorJitter"]
+              }
+            },
+            "params": { "type": "object" }
+          }
+        }
+      }
+    },
+    "inference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "batchSize": { "type": "integer", "minimum": 1 },
+        "tiling": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "tileSize": { "$ref": "#/definitions/size2" },
+            "overlap": { "type": "integer", "minimum": 0 },
+            "padMode": {
+              "type": "string",
+              "enum": ["reflect", "edge", "zero"]
+            },
+            "blend": { "type": "string", "enum": ["feather", "average", "max"] }
+          }
+        }
+      }
+    },
+    "postprocessing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "activation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "type": { "type": "string", "enum": ["sigmoid", "tanh", "none"] }
+          }
+        },
+        "clamp": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "denormalize": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "scale": { "type": "number" },
+            "dtype": { "type": "string", "enum": ["uint8", "float32"] }
+          }
+        },
+        "resizeTo": {
+          "oneOf": [
+            { "type": "string", "enum": ["input", "none"] },
+            { "$ref": "#/definitions/size2" }
+          ]
+        },
+        "colorMap": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "mode": {
+              "type": "string",
+              "enum": ["grayscale", "magma", "viridis", "plasma"]
+            },
+            "channel": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "toneMap": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "method": {
+              "type": "string",
+              "enum": ["aces", "reinhard", "filmic"]
+            },
+            "exposure": { "type": "number" },
+            "gamma": { "type": "number" }
+          }
+        },
+        "paletteMap": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "source": { "type": "string", "enum": ["argmax", "channel"] },
+            "channel": { "type": "integer", "minimum": 0 },
+            "palette": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": ["preset", "file", "inline"]
+                },
+                "preset": { "type": "string" },
+                "file": { "type": "string" },
+                "inline": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/rgb8" }
+                }
+              },
+              "required": ["mode"]
+            },
+            "outline": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "apply": { "type": "boolean" },
+                "color": { "$ref": "#/definitions/rgb8" },
+                "thickness": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        },
+        "blendOverlay": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "alpha": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "save": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "path": { "type": "string" },
+            "format": {
+              "type": "string",
+              "enum": ["png", "jpeg", "webp", "tiff"]
+            },
+            "bitDepth": { "type": "integer", "enum": [8, 16, 32] },
+            "colorSpace": { "type": "string", "enum": ["srgb", "linear"] },
+            "linearToSRGB": { "type": "boolean" },
+            "splitChannels": { "type": "boolean" },
+            "channelNames": { "type": "array", "items": { "type": "string" } },
+            "filename": { "type": "string" },
+            "quality": { "type": "integer", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "saveRaw": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "format": { "type": "string", "enum": ["npy", "npz", "bin"] },
+            "path": { "type": "string" }
+          }
+        },
+        "writeMeta": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "jsonPath": { "type": "string" }
+          }
+        }
+      }
+    },
+    "custom": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preprocessingFn": { "type": "string" },
+        "postprocessingFn": { "type": "string" }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "type": "string", "enum": ["debug", "info", "error"] },
+        "saveLogs": { "type": "boolean" },
+        "logPath": { "type": "string" }
+      }
+    },
+    "visualization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "apply": { "type": "boolean" },
+        "type": {
+          "type": "string",
+          "enum": ["sideBySide", "overlay", "heatmap", "difference"]
+        },
+        "outputPath": { "type": "string" }
+      }
+    }
+  },
+  "definitions": {
+    "size2": {
+      "type": "array",
+      "items": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "integer", "minimum": 1 }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "vec3f": {
+      "type": "array",
+      "items": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "rgb8": {
+      "type": "array",
+      "items": [
+        { "type": "integer", "minimum": 0, "maximum": 255 },
+        { "type": "integer", "minimum": 0, "maximum": 255 },
+        { "type": "integer", "minimum": 0, "maximum": 255 }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}
