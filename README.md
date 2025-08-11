@@ -1,4 +1,4 @@
-Name: your-package-name
+Name: imageflowio
 
 Description:
 
