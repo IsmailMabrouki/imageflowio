@@ -4,6 +4,10 @@ Config-driven image-to-image inference pipeline.
 
 Define your entire pipeline in a `config.json` — model loading, runtime settings, preprocessing, tiling, postprocessing, and output saving — and run. No procedural glue required.
 
+## npm
+
+https://www.npmjs.com/package/imageflowio
+
 ### Status
 
 Early stage. Configuration spec is documented; implementation is evolving. Expect breaking changes.

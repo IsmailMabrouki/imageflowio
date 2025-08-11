@@ -5,6 +5,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema URI for editor tooling."
+    },
     "model": {
       "type": "object",
       "additionalProperties": false,
@@ -314,7 +318,7 @@
   "definitions": {
     "size2": {
       "type": "array",
-      "items": [
+      "prefixItems": [
         { "type": "integer", "minimum": 1 },
         { "type": "integer", "minimum": 1 }
       ],
@@ -323,7 +327,7 @@
     },
     "vec3f": {
       "type": "array",
-      "items": [
+      "prefixItems": [
         { "type": "number" },
         { "type": "number" },
         { "type": "number" }
@@ -333,7 +337,7 @@
     },
     "rgb8": {
       "type": "array",
-      "items": [
+      "prefixItems": [
         { "type": "integer", "minimum": 0, "maximum": 255 },
         { "type": "integer", "minimum": 0, "maximum": 255 },
         { "type": "integer", "minimum": 0, "maximum": 255 }

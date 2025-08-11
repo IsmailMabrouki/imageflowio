@@ -2,7 +2,7 @@
 
 Minimal command-line interface to validate and run ImageFlowIO configurations.
 
-Status: validation only — pipeline execution to be implemented.
+Status: preview runner — validates config and runs a basic image-to-image pipeline (resize/crop/grayscale + save). More features coming.
 
 ## Install
 
@@ -21,8 +21,13 @@ imageflowio --config <path/to/config.json> [--validate-only] [--verbose]
 
 Options:
   -c, --config         Path to config.json (default: ./config.json)
-  -V, --validate-only  Validate config and exit (no execution)
+  -V, --version        Print version and exit
+      --validate-only  Validate config and exit (no execution)
   -v, --verbose        Verbose logs
+      --input <path>   Override input.source
+      --output <path>  Override output.save.path
+      --dry-run        Validate and print plan only
+      --print-schema   Print packaged schema path
   -h, --help           Show help
 ```
 

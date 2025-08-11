@@ -2,6 +2,8 @@ import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import { ImageFlowConfig, Size2 } from "./types";
+import sharpModule from "sharp";
+import { writeNpy } from "./utils/npy";
 
 export class ImageFlowPipeline {
   constructor(private readonly config: ImageFlowConfig) {}
@@ -12,6 +14,17 @@ export class ImageFlowPipeline {
       throw new Error("Only image input is supported in this preview.");
 
     const inputAbs = path.resolve(process.cwd(), input.source);
+    // Apply execution.threads if provided
+    const threads = this.config.execution?.threads;
+    if (threads?.apply) {
+      const count =
+        threads.count === "auto" || threads.count == null
+          ? undefined
+          : Number(threads.count);
+      if (typeof count === "number" && count > 0) {
+        sharpModule.concurrency(count);
+      }
+    }
     const image = sharp(inputAbs, { failOn: "none" });
     const originalMeta = await image.metadata();
 
@@ -102,6 +115,39 @@ export class ImageFlowPipeline {
           .toFile(target);
       } else {
         await out.toFile(target);
+      }
+      // Optionally write metadata
+      if (this.config.output?.writeMeta?.apply) {
+        const metaPath = this.config.output.writeMeta.jsonPath
+          ? path.resolve(process.cwd(), this.config.output.writeMeta.jsonPath)
+          : path.join(dir, "meta.json");
+        const meta = {
+          input: input.source,
+          output: target,
+          config: this.config,
+          timestamp: new Date().toISOString(),
+        };
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+      }
+      // Optionally save raw tensor placeholder (currently re-reads saved image bytes)
+      if (
+        this.config.output?.saveRaw?.apply &&
+        this.config.output.saveRaw.path
+      ) {
+        const rawDir = path.resolve(
+          process.cwd(),
+          this.config.output.saveRaw.path
+        );
+        if (!fs.existsSync(rawDir)) fs.mkdirSync(rawDir, { recursive: true });
+        const rawPath = path.join(rawDir, path.parse(target).name + ".npy");
+        const imgBuf = await fs.promises.readFile(target);
+        // Placeholder: store bytes as uint8 1D array
+        writeNpy(
+          rawPath,
+          new Uint8Array(imgBuf.buffer, imgBuf.byteOffset, imgBuf.byteLength),
+          [imgBuf.byteLength],
+          "uint8"
+        );
       }
       return { outputPath: target };
     }

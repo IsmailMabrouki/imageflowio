@@ -21,8 +21,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build project
+      - name: Type check and build
         run: npm run build
+
+      - name: Run tests
+        run: npm test
 
       - name: Publish to npm
         run: npm publish --access public
