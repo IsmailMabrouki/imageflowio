@@ -275,6 +275,66 @@ describe("Pipeline", () => {
     expect(fs.existsSync(diffPath)).toBe(true);
   });
 
+  it("writes overlay visualization when enabled", async () => {
+    const outRoot = path.join(process.cwd(), "testoutput");
+    if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(outRoot, "pipeline-"));
+    const inputPath = path.join(tmpDir, "input.png");
+    const raw = Buffer.from([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 255, 0]);
+    await (
+      await import("sharp")
+    )
+      .default(raw, {
+        raw: { width: 2, height: 2, channels: 3 },
+      })
+      .png()
+      .toFile(inputPath);
+
+    const outDir = path.join(tmpDir, "out");
+    const vizDir = path.join(tmpDir, "viz");
+    const pipeline = new ImageFlowPipeline({
+      model: { path: "noop.onnx" },
+      input: { type: "image", source: inputPath },
+      visualization: { apply: true, type: "overlay", outputPath: vizDir },
+      output: { save: { apply: true, path: outDir, format: "png" } },
+    } as any);
+
+    const res = await pipeline.run({ backend: "noop" });
+    const base = path.parse(res.outputPath!).name;
+    const vizPath = path.join(vizDir, `${base}_overlay.png`);
+    expect(fs.existsSync(vizPath)).toBe(true);
+  });
+
+  it("writes heatmap visualization when enabled", async () => {
+    const outRoot = path.join(process.cwd(), "testoutput");
+    if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(outRoot, "pipeline-"));
+    const inputPath = path.join(tmpDir, "input.png");
+    const raw = Buffer.from([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 255, 0]);
+    await (
+      await import("sharp")
+    )
+      .default(raw, {
+        raw: { width: 2, height: 2, channels: 3 },
+      })
+      .png()
+      .toFile(inputPath);
+
+    const outDir = path.join(tmpDir, "out");
+    const vizDir = path.join(tmpDir, "viz");
+    const pipeline = new ImageFlowPipeline({
+      model: { path: "noop.onnx" },
+      input: { type: "image", source: inputPath },
+      visualization: { apply: true, type: "heatmap", outputPath: vizDir },
+      output: { save: { apply: true, path: outDir, format: "png" } },
+    } as any);
+
+    const res = await pipeline.run({ backend: "noop" });
+    const base = path.parse(res.outputPath!).name;
+    const vizPath = path.join(vizDir, `${base}_heatmap.png`);
+    expect(fs.existsSync(vizPath)).toBe(true);
+  });
+
   it("paletteMap can load palette from file", async () => {
     const outRoot = path.join(process.cwd(), "testoutput");
     if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true });

@@ -844,6 +844,41 @@ var ImageFlowPipeline = class {
           }
           const vizName = import_path.default.parse(target).name + "_diff.png";
           await (0, import_sharp.default)(diff, { raw: { width: w, height: h, channels: 3 } }).png().toFile(import_path.default.join(vizDir, vizName));
+        } else if (vizType === "overlay") {
+          const outMeta = await out.metadata();
+          const w = outMeta.width ?? 0;
+          const h = outMeta.height ?? 0;
+          const base = await (0, import_sharp.default)(inputAbs, { failOn: "none" }).resize({ width: w, height: h, fit: "fill" }).png().toBuffer();
+          const overlay = await out.clone().ensureAlpha(0.5).png().toBuffer();
+          const viz = (0, import_sharp.default)(base).composite([{ input: overlay, blend: "over" }]).png();
+          const vizName = import_path.default.parse(target).name + "_overlay.png";
+          await viz.toFile(import_path.default.join(vizDir, vizName));
+        } else if (vizType === "heatmap") {
+          const outMeta = await out.metadata();
+          const w = outMeta.width ?? 0;
+          const h = outMeta.height ?? 0;
+          const left = await (0, import_sharp.default)(inputAbs, { failOn: "none" }).resize({ width: w, height: h, fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
+          const right = await out.clone().raw().toBuffer({ resolveWithObject: true });
+          const lc = left.info.channels ?? 3;
+          const rc = right.info.channels ?? 3;
+          const ch = Math.min(lc, rc, 3);
+          const heat = Buffer.alloc(w * h * 3);
+          for (let i = 0; i < w * h; i++) {
+            let acc = 0;
+            for (let c = 0; c < ch; c++) {
+              const lv = left.data[i * lc + c] || 0;
+              const rv = right.data[i * rc + c] || 0;
+              acc += Math.abs(lv - rv);
+            }
+            const val = Math.max(0, Math.min(255, Math.round(acc / ch)));
+            const [r, g, b] = mapValueToColor(val, "magma");
+            const j = i * 3;
+            heat[j] = r;
+            heat[j + 1] = g;
+            heat[j + 2] = b;
+          }
+          const vizName = import_path.default.parse(target).name + "_heatmap.png";
+          await (0, import_sharp.default)(heat, { raw: { width: w, height: h, channels: 3 } }).png().toFile(import_path.default.join(vizDir, vizName));
         }
       }
       if (this.config.output?.writeMeta?.apply) {
