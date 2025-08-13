@@ -120,10 +120,11 @@ This example demonstrates the full flexibility of the configuration for image-to
 
 - **name**: string — Human-readable identifier for the model (e.g., `"unet"`).
 - **path**: string — Local or remote path/URL to the model artifact (e.g., ONNX/TFJS).
+- **layout**: "nhwc" | "nchw" — Optional model tensor layout hint (currently informational).
 
 ### execution
 
-- **backend**: "auto" | "cpu" | "gpu" — Execution backend selection. `"auto"` chooses the best available.
+- **backend**: "auto" | "onnx" | "noop" — Execution backend selection. `"auto"` chooses based on model path or defaults.
 - **threads**: Object — CPU threading controls.
   - **apply**: boolean — Enable or disable multithreading.
   - **count**: number | "auto" — Thread count; `"auto"` uses available cores.
@@ -175,9 +176,13 @@ All steps are optional and controlled via `apply` where applicable.
 
 Notes:
 
-- The current implementation performs simple averaging in overlap regions. This removes seams for identity-like models and many smooth outputs.
-- Padding modes and advanced blending are reserved for future versions; out-of-bounds areas are clipped to image bounds.
-- Tiling respects preprocessing normalization settings per tile and uses `postprocessing.denormalize.scale` for scaling float outputs back to `uint8`.
+- Overlaps support multiple blend modes:
+  - `average` (default): uniform averaging across overlaps
+  - `feather`: distance-weighted averaging to reduce seams further
+  - `max`: per-pixel maximum across overlapping tiles
+- Partial tiles at image edges can be padded to full tile size using `padMode`:
+  - `reflect` (mirror), `edge` (copy), or `zero` (black)
+- Tiling respects preprocessing settings per tile and uses `postprocessing.denormalize.scale` for converting backend float outputs back to displayable `uint8`.
 
 ### postprocessing
 
@@ -225,7 +230,7 @@ Notes:
   - **apply**: boolean — Enable saving the output image.
   - **path**: string — Directory to write files to.
   - **format**: "png" | "jpeg" | "webp" | "tiff" — File format.
-  - **bitDepth**: 8 | 16 | 32 — Bit depth for output where supported (e.g., TIFF/PNG).
+  - **bitDepth**: 1 | 2 | 4 | 8 | 16 — Bit depth for output where supported (PNG: 8/16, TIFF: 1/2/4/8; 16 for PNG only in current pipeline).
   - **colorSpace**: "srgb" | "linear" — Output color space metadata.
   - **linearToSRGB**: boolean — Convert linear output to sRGB (gamma 2.4, sRGB companding) before save.
   - **splitChannels**: boolean — Save each channel to a separate file in addition to the combined image.
@@ -237,7 +242,7 @@ Notes:
   - **jsonPath**: string — Destination path for metadata JSON.
 - **saveRaw**:
   - **apply**: boolean — Persist raw tensor output.
-  - **format**: "npy" | "bin" — Raw tensor file format (NPZ planned).
+  - **format**: "npy" | "bin" — Raw tensor file format.
   - **dtype**: "uint8" | "float32" — Data type when writing NPY (BIN is always raw bytes of the saved image).
   - **path**: string — Directory to store raw outputs.
 
@@ -248,15 +253,16 @@ Notes:
 
 ### logging
 
-- **level**: "debug" | "info" | "error" — Log verbosity.
+- **level**: "debug" | "info" | "error" — Log verbosity (debug: all; info: phase done + totals; error: totals only).
 - **saveLogs**: boolean — Persist logs to disk.
 - **logPath**: string — Destination path for log file when `saveLogs` is true.
 
 ### visualization
 
 - **apply**: boolean — Enable visualization output artifacts.
-- **type**: "sideBySide" | "overlay" | "heatmap" | "difference" — Visualization mode (sideBySide and difference implemented).
+- **type**: "sideBySide" | "overlay" | "heatmap" | "difference" — Visualization mode (all listed implemented).
 - **outputPath**: string — Directory to write visualization outputs.
+- **alpha**: number — Overlay transparency for `overlay` mode in [0,1].
 
 ---
 

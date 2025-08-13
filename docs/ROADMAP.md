@@ -13,7 +13,7 @@ A concise, actionable plan to evolve ImageFlowIO following library best practice
 
 ## 1) API & architecture
 
-- [ ] Finalize public surface: export backends and types via `src/index.ts`
+- [x] Finalize public surface: export backends and types via `src/index.ts`
 - [ ] Stabilize backend adapter interface (`InferenceBackend`) and document tensor layout (NHWC/NCHW)
 - [ ] Introduce typed error classes (e.g., `ConfigError`, `InferenceError`)
 

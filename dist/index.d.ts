@@ -2,9 +2,10 @@ type Size2 = [number, number];
 interface ModelConfig {
     name?: string;
     path: string;
+    layout?: "nhwc" | "nchw";
 }
 interface ExecutionConfig {
-    backend?: "auto" | "cpu" | "gpu";
+    backend?: "auto" | "cpu" | "gpu" | "onnx" | "noop";
     threads?: {
         apply?: boolean;
         count?: number | "auto";
@@ -44,6 +45,24 @@ interface PreprocessingConfig {
     format?: FormatConfig;
     grayscale?: {
         apply?: boolean;
+    };
+    augmentations?: {
+        apply?: boolean;
+        methods?: Array<"flip" | "rotate" | "colorJitter">;
+        params?: {
+            flip?: {
+                axis?: "horizontal" | "vertical";
+                direction?: "horizontal" | "vertical";
+            };
+            rotate?: {
+                angle?: 0 | 90 | 180 | 270 | number;
+            };
+            colorJitter?: {
+                brightness?: number;
+                saturation?: number;
+                hue?: number;
+            };
+        };
     };
 }
 interface TilingConfig {
@@ -150,6 +169,7 @@ interface VisualizationConfig {
     apply?: boolean;
     type?: "sideBySide" | "overlay" | "heatmap" | "difference";
     outputPath?: string;
+    alpha?: number;
 }
 interface ImageFlowConfig {
     model: ModelConfig;
@@ -181,12 +201,14 @@ interface InferenceInput {
     width: number;
     height: number;
     channels: number;
+    layout?: "nhwc" | "nchw";
 }
 interface InferenceOutput {
     data: Float32Array;
     width: number;
     height: number;
     channels: number;
+    layout?: "nhwc" | "nchw";
 }
 interface InferenceBackend {
     name: string;
@@ -207,4 +229,23 @@ declare class BackendLoadError extends ImageFlowError {
 declare class InferenceError extends ImageFlowError {
 }
 
-export { ActivationConfig, BackendLoadError, BlendOverlayConfig, CenterCropConfig, ClampConfig, ColorMapConfig, ConfigValidationError, CustomConfig, DenormalizeConfig, ExecutionConfig, FormatConfig, ImageFlowConfig, ImageFlowError, ImageFlowPipeline, InferenceBackend, InferenceConfig, InferenceError, InferenceInput, InferenceOutput, InputConfig, LoggingConfig, ModelConfig, NormalizeConfig, OutputConfig, PaletteMapConfig, PipelineError, PostprocessingConfig, PreprocessingConfig, ResizeConfig, RunOptions, SaveConfig, SaveRawConfig, Size2, TilingConfig, ToneMapConfig, VisualizationConfig };
+declare class NoopBackend implements InferenceBackend {
+    name: string;
+    loadModel(_modelPath: string): Promise<void>;
+    infer(input: InferenceInput): Promise<InferenceOutput>;
+}
+
+declare class OnnxBackend implements InferenceBackend {
+    name: string;
+    private session;
+    private ort;
+    private static sessionCache;
+    loadModel(modelPath: string): Promise<void>;
+    infer(input: InferenceInput): Promise<InferenceOutput>;
+    dispose(): Promise<void>;
+}
+
+declare function nhwcToNchw(data: Float32Array, width: number, height: number, channels: number): Float32Array;
+declare function nchwToNhwc(data: Float32Array, width: number, height: number, channels: number): Float32Array;
+
+export { ActivationConfig, BackendLoadError, BlendOverlayConfig, CenterCropConfig, ClampConfig, ColorMapConfig, ConfigValidationError, CustomConfig, DenormalizeConfig, ExecutionConfig, FormatConfig, ImageFlowConfig, ImageFlowError, ImageFlowPipeline, InferenceBackend, InferenceConfig, InferenceError, InferenceInput, InferenceOutput, InputConfig, LoggingConfig, ModelConfig, NoopBackend, NormalizeConfig, OnnxBackend, OutputConfig, PaletteMapConfig, PipelineError, PostprocessingConfig, PreprocessingConfig, ResizeConfig, RunOptions, SaveConfig, SaveRawConfig, Size2, TilingConfig, ToneMapConfig, VisualizationConfig, nchwToNhwc, nhwcToNchw };

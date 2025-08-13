@@ -135,19 +135,19 @@ Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` s
 
 ### Feature support matrix (selected)
 
-| Area           | Feature                                  | Status  |
-| -------------- | ---------------------------------------- | ------- |
-| Preprocessing  | Resize, center-crop, grayscale           | Done    |
-| Preprocessing  | Normalize (mean/std)                     | Done    |
-| Inference      | Noop backend, ONNX (optional)            | Done    |
-| Inference      | Tiled inference (overlap averaging)      | Done    |
-| Postprocessing | Activation, clamp, denormalize (preview) | Partial |
-| Postprocessing | Colormaps, palette mapping, overlay      | Done    |
-| Output         | PNG/JPEG/WebP/TIFF save                  | Done    |
-| Output         | Split channels, raw NPY, metadata        | Done    |
-| CLI/DX         | Validate/run, Ajv 2020-12, JSON errors   | Done    |
-| Packaging/CI   | Dual build (CJS/ESM), CI matrix          | Done    |
-| Visualization  | sideBySide, difference                   | Done    |
+| Area           | Feature                                           | Status  |
+| -------------- | ------------------------------------------------- | ------- |
+| Preprocessing  | Resize, center-crop, grayscale                    | Done    |
+| Preprocessing  | Normalize (mean/std)                              | Done    |
+| Inference      | Noop backend, ONNX (optional)                     | Done    |
+| Inference      | Tiled inference (overlap, blend modes, padding)   | Done    |
+| Postprocessing | Activation, clamp, denormalize (preview)          | Partial |
+| Postprocessing | Colormaps, palette mapping, overlay, tone mapping | Done    |
+| Output         | PNG/JPEG/WebP/TIFF save                           | Done    |
+| Output         | Split channels, raw NPY/BIN, metadata, logs       | Done    |
+| CLI/DX         | Validate/run, Ajv 2020-12, JSON errors            | Done    |
+| Packaging/CI   | Dual build (CJS/ESM), CI matrix                   | Done    |
+| Visualization  | sideBySide, difference, overlay, heatmap          | Done    |
 
 ### License
 

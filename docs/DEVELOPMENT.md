@@ -12,6 +12,7 @@ This document is for maintainers and contributors working on ImageFlowIO.
 
 - Build: `npm run build`
 - Run tests: `npx vitest run --reporter=dot`
+- Windows tip: prefer `;` to chain commands in PowerShell (e.g., `npm run build; npx vitest run`).
 - ESM/CJS outputs are built via `tsup` into `dist/`.
 
 ## Release Process (npm)
@@ -67,4 +68,4 @@ Notes
 ## Common issues
 
 - Only CI ran, not publish: you pushed to a branch, but not a `v*` tag. Create and push the tag to trigger publish.
-- Windows EPERM/Access denied in tests: CLI tests are hardened, but if your env blocks spawns, they skip gracefully.
+- Windows EPERM/Access denied in tests: CLI tests are hardened, but if your env blocks spawns, they skip gracefully. Use `;` instead of `&&` for chaining.

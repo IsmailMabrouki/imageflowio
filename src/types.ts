@@ -3,10 +3,11 @@ export type Size2 = [number, number];
 export interface ModelConfig {
   name?: string;
   path: string;
+  layout?: "nhwc" | "nchw";
 }
 
 export interface ExecutionConfig {
-  backend?: "auto" | "cpu" | "gpu";
+  backend?: "auto" | "cpu" | "gpu" | "onnx" | "noop";
   threads?: { apply?: boolean; count?: number | "auto" };
   warmupRuns?: number;
   useCaching?: boolean;
@@ -48,6 +49,18 @@ export interface PreprocessingConfig {
   normalize?: NormalizeConfig;
   format?: FormatConfig;
   grayscale?: { apply?: boolean };
+  augmentations?: {
+    apply?: boolean;
+    methods?: Array<"flip" | "rotate" | "colorJitter">;
+    params?: {
+      flip?: {
+        axis?: "horizontal" | "vertical";
+        direction?: "horizontal" | "vertical";
+      };
+      rotate?: { angle?: 0 | 90 | 180 | 270 | number };
+      colorJitter?: { brightness?: number; saturation?: number; hue?: number };
+    };
+  };
 }
 
 export interface TilingConfig {
@@ -166,6 +179,7 @@ export interface VisualizationConfig {
   apply?: boolean;
   type?: "sideBySide" | "overlay" | "heatmap" | "difference";
   outputPath?: string;
+  alpha?: number;
 }
 
 export interface ImageFlowConfig {

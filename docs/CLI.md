@@ -2,7 +2,7 @@
 
 Minimal command-line interface to validate and run ImageFlowIO configurations.
 
-Status: preview runner — validates config and runs a basic image-to-image pipeline (resize/crop/grayscale/normalize + colormaps + save). More features coming.
+Status: preview runner — validates config and runs an image-to-image pipeline (resize/crop/grayscale/augmentations, normalize/format to float, optional ONNX inference, postprocess: activation/clamp/denormalize/toneMap/colorMap/paletteMap/overlay, output save/split/raw/meta, visualization modes).
 
 ## Install
 
@@ -34,6 +34,10 @@ Options:
       --dry-run        Validate and print plan only
       --print-schema   Print packaged schema path
   -h, --help           Show help
+
+Notes:
+- Use `--input` and `--output` to override `config.input.source` and `output.save.path` at runtime.
+- `--print-schema` prints the packaged config schema path for editor integration.
 ```
 
 ## Examples

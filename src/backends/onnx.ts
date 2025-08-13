@@ -1,4 +1,5 @@
 import { InferenceBackend, InferenceInput, InferenceOutput } from "./types";
+import { nhwcToNchw, nchwToNhwc } from "../utils/tensor";
 
 export class OnnxBackend implements InferenceBackend {
   name = "onnxruntime-node";
@@ -35,9 +36,15 @@ export class OnnxBackend implements InferenceBackend {
     if (!this.session || !this.ort)
       throw new Error("ONNX session not initialized");
     const ort = this.ort;
-    // Assume NHWC by default; models often expect NCHW; this can be made configurable later
+    const layout = input.layout || "nhwc";
+    const isNchw = layout === "nchw";
     const nhwcShape = [1, input.height, input.width, input.channels];
-    const tensor = new ort.Tensor("float32", input.data, nhwcShape);
+    const nchwShape = [1, input.channels, input.height, input.width];
+    const tensorData: Float32Array = isNchw
+      ? nhwcToNchw(input.data, input.width, input.height, input.channels)
+      : input.data;
+    const tensorShape = isNchw ? nchwShape : nhwcShape;
+    const tensor = new ort.Tensor("float32", tensorData, tensorShape);
 
     const inputName = (this.session as any).inputNames?.[0] ?? "input";
     const feeds: Record<string, any> = {};
@@ -45,20 +52,31 @@ export class OnnxBackend implements InferenceBackend {
     const results = await this.session.run(feeds);
     const firstOutputName = Object.keys(results)[0];
     const outTensor = results[firstOutputName];
-    const data: Float32Array = outTensor.data as Float32Array;
-    const dims: number[] = (outTensor.dims as number[]) || nhwcShape;
+    let data: Float32Array = outTensor.data as Float32Array;
+    const dims: number[] =
+      (outTensor.dims as number[]) || (isNchw ? nchwShape : nhwcShape);
 
     // Best-effort to parse dimensions
     let width = input.width;
     let height = input.height;
     let channels = input.channels as 1 | 2 | 3 | 4;
     if (dims.length === 4) {
-      // try NHWC
-      const [n, h, w, c] = dims;
-      if (n === 1 && h > 0 && w > 0 && c > 0) {
-        width = w;
-        height = h;
-        channels = Math.max(1, Math.min(4, c)) as 1 | 2 | 3 | 4;
+      // Prefer NHWC; detect NCHW when dims look like [1,C,H,W]
+      const [d0, d1, d2, d3] = dims;
+      if (d0 === 1 && d1 > 0 && d2 > 0 && d3 > 0) {
+        // Heuristic: if layout was requested NCHW or dims look like NCHW (channels fairly small)
+        const looksNchw = isNchw || (d1 <= 4 && d2 > 4 && d3 > 4);
+        if (looksNchw) {
+          channels = Math.max(1, Math.min(4, d1)) as 1 | 2 | 3 | 4;
+          height = d2;
+          width = d3;
+          data = nchwToNhwc(data, width, height, channels);
+        } else {
+          // NHWC
+          height = d1;
+          width = d2;
+          channels = Math.max(1, Math.min(4, d3)) as 1 | 2 | 3 | 4;
+        }
       }
     }
 

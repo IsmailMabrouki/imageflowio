@@ -4,9 +4,13 @@ on:
   push:
     tags:
       - "v*" # publish only on version tags
+  workflow_dispatch: {}
 
 jobs:
   publish:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -28,7 +32,7 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to npm (with provenance)
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

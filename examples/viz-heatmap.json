@@ -1,0 +1,9 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "noop.onnx" },
+  "input": { "type": "image", "source": "./examples/images/sample.png" },
+  "visualization": { "apply": true, "type": "heatmap" },
+  "output": {
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" }
+  }
+}

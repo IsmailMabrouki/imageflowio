@@ -1,0 +1,9 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "noop.onnx" },
+  "input": { "type": "image", "source": "./examples/images/sample.png" },
+  "visualization": { "apply": true, "type": "overlay", "alpha": 0.6 },
+  "output": {
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" }
+  }
+}

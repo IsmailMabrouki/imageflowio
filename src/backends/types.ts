@@ -3,6 +3,7 @@ export interface InferenceInput {
   width: number;
   height: number;
   channels: number;
+  layout?: "nhwc" | "nchw";
 }
 
 export interface InferenceOutput {
@@ -10,6 +11,7 @@ export interface InferenceOutput {
   width: number;
   height: number;
   channels: number;
+  layout?: "nhwc" | "nchw";
 }
 
 export interface InferenceBackend {

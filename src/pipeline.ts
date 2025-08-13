@@ -29,6 +29,11 @@ export class ImageFlowPipeline {
       throw new Error(`Input image not found: ${input.source}`);
     }
     const tStart = performance.now();
+    const logs: string[] = [];
+    const logLine = (m: string) => {
+      logs.push(`[${new Date().toISOString()}] ${m}`);
+    };
+    logLine("pipeline/start");
     // Apply threads override or config threads
     const threadsOverride = options?.threads;
     if (threadsOverride && threadsOverride !== "auto") {
@@ -45,6 +50,7 @@ export class ImageFlowPipeline {
     const image = sharp(inputAbs, { failOn: "none" });
     const originalMeta = await image.metadata();
     const tAfterLoad = performance.now();
+    logLine(`load/done ms=${(tAfterLoad - tStart).toFixed(2)}`);
 
     let work = image.clone();
 
@@ -79,6 +85,58 @@ export class ImageFlowPipeline {
       work = work.grayscale();
     }
 
+    // Preprocessing: augmentations (preview)
+    if (pp?.augmentations?.apply) {
+      const methods: string[] = ((pp.augmentations as any).methods ||
+        []) as string[];
+      const params: any = (pp.augmentations as any).params || {};
+      for (const method of methods) {
+        if (method === "flip") {
+          const axis =
+            params?.flip?.axis || params?.flip?.direction || "horizontal";
+          if (axis === "vertical") {
+            work = work.flip();
+          } else {
+            work = work.flop();
+          }
+        } else if (method === "rotate") {
+          const angle = Number(params?.rotate?.angle ?? 0);
+          const allowed = [0, 90, 180, 270];
+          const rot = allowed.includes(angle) ? angle : 0;
+          if (rot !== 0) work = work.rotate(rot as 0 | 90 | 180 | 270);
+        } else if (method === "colorJitter") {
+          const brightness = Number(params?.colorJitter?.brightness ?? 1);
+          const saturation = Number(params?.colorJitter?.saturation ?? 1);
+          const hue = Number(params?.colorJitter?.hue ?? 0);
+          work = work.modulate({
+            brightness: isFinite(brightness) && brightness > 0 ? brightness : 1,
+            saturation: isFinite(saturation) && saturation > 0 ? saturation : 1,
+            hue: isFinite(hue) ? hue : 0,
+          });
+        }
+      }
+    }
+
+    // Custom preprocessing hook
+    if (this.config.custom?.preprocessingFn) {
+      try {
+        const abs = path.resolve(
+          process.cwd(),
+          this.config.custom.preprocessingFn
+        );
+        const mod: any = await import(abs);
+        const fn = mod?.default || mod?.preprocess || mod?.run;
+        if (typeof fn === "function") {
+          const maybe = await fn(work.clone());
+          if (maybe && typeof (maybe as any).metadata === "function") {
+            work = maybe as any;
+          }
+        }
+      } catch {
+        // ignore custom preprocessing errors in preview
+      }
+    }
+
     // Build tensor for inference if requested (float32 path + optional normalize)
     let inputTensor: {
       data: Float32Array;
@@ -95,33 +153,82 @@ export class ImageFlowPipeline {
         .toBuffer({ resolveWithObject: true });
       const width = info.width ?? 0;
       const height = info.height ?? 0;
-      const channels = info.channels ?? 3;
-      const floatData = new Float32Array(width * height * channels);
+      const srcChannels = info.channels ?? 3;
+      const desiredChannels = pp?.format?.channels ?? srcChannels;
+      const outChannels =
+        desiredChannels === 1 || desiredChannels === 3
+          ? desiredChannels
+          : srcChannels;
+      const floatData = new Float32Array(width * height * outChannels);
       const mean = pp?.normalize?.mean ?? [0, 0, 0];
       const std = pp?.normalize?.std ?? [1, 1, 1];
       const applyNorm = pp?.normalize?.apply === true;
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const i = (y * width + x) * channels;
-          for (let c = 0; c < channels; c++) {
-            const v = data[i + c] / 255;
-            floatData[i + c] = applyNorm
-              ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
-              : v;
+      if (outChannels === srcChannels) {
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * srcChannels;
+            for (let c = 0; c < srcChannels; c++) {
+              const v = data[i + c] / 255;
+              floatData[i + c] = applyNorm
+                ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
+                : v;
+            }
+          }
+        }
+      } else if (outChannels === 1 && srcChannels >= 3) {
+        // RGB -> grayscale luminance
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * srcChannels;
+            const r = data[i + 0] / 255;
+            const g = data[i + 1] / 255;
+            const b = data[i + 2] / 255;
+            let v = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if (applyNorm) v = (v - (mean[0] ?? 0)) / (std[0] ?? 1);
+            floatData[y * width + x] = v;
+          }
+        }
+      } else if (outChannels === 3 && srcChannels === 1) {
+        // grayscale -> RGB replicate
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const v0 = data[y * width + x] / 255;
+            const r = applyNorm ? (v0 - (mean[0] ?? 0)) / (std[0] ?? 1) : v0;
+            const g = applyNorm ? (v0 - (mean[1] ?? 0)) / (std[1] ?? 1) : v0;
+            const b = applyNorm ? (v0 - (mean[2] ?? 0)) / (std[2] ?? 1) : v0;
+            const j = (y * width + x) * 3;
+            floatData[j + 0] = r;
+            floatData[j + 1] = g;
+            floatData[j + 2] = b;
+          }
+        }
+      } else {
+        // Fallback: copy min channels
+        const ch = Math.min(outChannels, srcChannels);
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const si = (y * width + x) * srcChannels;
+            const di = (y * width + x) * outChannels;
+            for (let c = 0; c < ch; c++) {
+              const v = data[si + c] / 255;
+              floatData[di + c] = applyNorm
+                ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
+                : v;
+            }
           }
         }
       }
       // Apply channel order for model input (float path) if requested
-      if (pp?.format?.channelOrder === "bgr" && (info.channels ?? 3) >= 3) {
+      if (pp?.format?.channelOrder === "bgr" && outChannels >= 3) {
         for (let i = 0; i < width * height; i++) {
-          const base = i * channels;
+          const base = i * outChannels;
           const r = floatData[base + 0];
           const b = floatData[base + 2];
           floatData[base + 0] = b;
           floatData[base + 2] = r;
         }
       }
-      inputTensor = { data: floatData, width, height, channels };
+      inputTensor = { data: floatData, width, height, channels: outChannels };
     }
     // Channel order conversion on uint8 path only (no float tensor)
     if (!needFloatTensor && pp?.format?.channelOrder === "bgr") {
@@ -144,14 +251,16 @@ export class ImageFlowPipeline {
       }
     }
     const tAfterPre = performance.now();
+    logLine(`preprocess/done ms=${(tAfterPre - tAfterLoad).toFixed(2)}`);
 
     // Placeholder for inference: image-to-image identity transform (no-op)
     let out = work;
     // Inference via backend if float tensor is prepared
     let tAfterInfer = performance.now();
     if (inputTensor) {
-      // Select backend: CLI/opts override -> extension heuristic
-      let backendChoice: "auto" | "onnx" | "noop" = options?.backend ?? "auto";
+      // Select backend: options override -> config.execution.backend -> extension heuristic
+      let backendChoice: "auto" | "onnx" | "noop" =
+        options?.backend ?? ((this.config.execution?.backend as any) || "auto");
       if (backendChoice === "auto") {
         backendChoice = this.config.model.path.toLowerCase().endsWith(".onnx")
           ? "onnx"
@@ -159,7 +268,13 @@ export class ImageFlowPipeline {
       }
       let backend: InferenceBackend =
         backendChoice === "onnx" ? new OnnxBackend() : new NoopBackend();
-      await backend.loadModel(this.config.model.path);
+      try {
+        await backend.loadModel(this.config.model.path);
+      } catch (e: any) {
+        throw new (await import("./errors.js")).BackendLoadError(
+          e?.message || String(e)
+        );
+      }
 
       // Optional warmup runs
       const warmupRuns = Math.max(0, this.config.execution?.warmupRuns ?? 0);
@@ -173,9 +288,7 @@ export class ImageFlowPipeline {
               channels: inputTensor.channels,
             });
           }
-        } catch {
-          // ignore warmup errors in preview
-        }
+        } catch {}
       }
 
       const tiling = this.config.inference?.tiling;
@@ -189,7 +302,9 @@ export class ImageFlowPipeline {
           .toBuffer({ resolveWithObject: true });
         const imgW = baseInfo.width ?? inputTensor.width;
         const imgH = baseInfo.height ?? inputTensor.height;
-        const ch = baseInfo.channels ?? inputTensor.channels;
+        const srcCh = baseInfo.channels ?? inputTensor.channels;
+        const desiredCh = pp?.format?.channels ?? srcCh;
+        const ch = desiredCh === 1 || desiredCh === 3 ? desiredCh : srcCh;
         const tileW = Math.max(1, tiling?.tileSize?.[0] ?? 256);
         const tileH = Math.max(1, tiling?.tileSize?.[1] ?? 256);
         const overlap = Math.max(0, tiling?.overlap ?? 0);
@@ -197,6 +312,14 @@ export class ImageFlowPipeline {
         const stepY = Math.max(1, tileH - overlap);
         const sum = new Float32Array(imgW * imgH * ch);
         const weight = new Float32Array(imgW * imgH);
+        const blendMode = (tiling?.blend ?? "average") as
+          | "average"
+          | "max"
+          | "feather";
+        const maxVals =
+          blendMode === "max"
+            ? new Float32Array(imgW * imgH * ch).fill(-Infinity)
+            : null;
         for (let y = 0; y < imgH; y += stepY) {
           const th = Math.min(tileH, imgH - y);
           for (let x = 0; x < imgW; x += stepX) {
@@ -208,22 +331,93 @@ export class ImageFlowPipeline {
               .extract({ left: x, top: y, width: tw, height: th })
               .raw()
               .toBuffer();
+            // Optional pad to fixed tile size for inference
+            const needPad =
+              tiling?.padMode && (tw < tileW || th < tileH) ? true : false;
+            const inferW = needPad ? tileW : tw;
+            const inferH = needPad ? tileH : th;
+            let tileInBuf: Buffer = tileBuf;
+            if (needPad) {
+              const mode = tiling?.padMode ?? "reflect";
+              if (mode === "zero") {
+                const pad = Buffer.alloc(inferW * inferH * srcCh, 0);
+                for (let iy = 0; iy < th; iy++) {
+                  for (let ix = 0; ix < tw; ix++) {
+                    const si = (iy * tw + ix) * srcCh;
+                    const di = (iy * inferW + ix) * srcCh;
+                    for (let c0 = 0; c0 < srcCh; c0++)
+                      pad[di + c0] = tileBuf[si + c0];
+                  }
+                }
+                tileInBuf = pad;
+              } else {
+                const extendWith = mode === "edge" ? "copy" : "mirror";
+                tileInBuf = await sharp(tileBuf, {
+                  raw: { width: tw, height: th, channels: srcCh },
+                })
+                  .extend({
+                    top: 0,
+                    left: 0,
+                    right: tileW - tw,
+                    bottom: tileH - th,
+                    background: { r: 0, g: 0, b: 0, alpha: 0 },
+                    extendWith,
+                  })
+                  .raw()
+                  .toBuffer();
+              }
+            }
             // to float + normalize
-            const tileFloat = new Float32Array(tw * th * ch);
+            const tileFloat = new Float32Array(inferW * inferH * ch);
             const mean = pp?.normalize?.mean ?? [0, 0, 0];
             const std = pp?.normalize?.std ?? [1, 1, 1];
             const applyNorm = pp?.normalize?.apply === true;
-            for (let i = 0; i < tw * th; i++) {
-              for (let c = 0; c < ch; c++) {
-                const v = tileBuf[i * ch + c] / 255;
-                tileFloat[i * ch + c] = applyNorm
-                  ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
-                  : v;
+            if (ch === srcCh) {
+              for (let i = 0; i < inferW * inferH; i++) {
+                for (let c = 0; c < ch; c++) {
+                  const v = tileInBuf[i * srcCh + c] / 255;
+                  tileFloat[i * ch + c] = applyNorm
+                    ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
+                    : v;
+                }
+              }
+            } else if (ch === 1 && srcCh >= 3) {
+              for (let i = 0; i < inferW * inferH; i++) {
+                const r = tileInBuf[i * srcCh + 0] / 255;
+                const g = tileInBuf[i * srcCh + 1] / 255;
+                const b = tileInBuf[i * srcCh + 2] / 255;
+                let v = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                if (applyNorm) v = (v - (mean[0] ?? 0)) / (std[0] ?? 1);
+                tileFloat[i] = v;
+              }
+            } else if (ch === 3 && srcCh === 1) {
+              for (let i = 0; i < inferW * inferH; i++) {
+                const v0 = tileInBuf[i] / 255;
+                tileFloat[i * 3 + 0] = applyNorm
+                  ? (v0 - (mean[0] ?? 0)) / (std[0] ?? 1)
+                  : v0;
+                tileFloat[i * 3 + 1] = applyNorm
+                  ? (v0 - (mean[1] ?? 0)) / (std[1] ?? 1)
+                  : v0;
+                tileFloat[i * 3 + 2] = applyNorm
+                  ? (v0 - (mean[2] ?? 0)) / (std[2] ?? 1)
+                  : v0;
+              }
+            } else {
+              // fallback copy min
+              const copyCh = Math.min(ch, srcCh);
+              for (let i = 0; i < inferW * inferH; i++) {
+                for (let c = 0; c < copyCh; c++) {
+                  const v = tileInBuf[i * srcCh + c] / 255;
+                  tileFloat[i * ch + c] = applyNorm
+                    ? (v - (mean[c] ?? 0)) / (std[c] ?? 1)
+                    : v;
+                }
               }
             }
             // Apply channel order for model input (tile float path)
             if (pp?.format?.channelOrder === "bgr" && ch >= 3) {
-              for (let i = 0; i < tw * th; i++) {
+              for (let i = 0; i < inferW * inferH; i++) {
                 const base = i * ch;
                 const r = tileFloat[base + 0];
                 const b = tileFloat[base + 2];
@@ -233,45 +427,85 @@ export class ImageFlowPipeline {
             }
             const tileOut = await backend.infer({
               data: tileFloat,
-              width: tw,
-              height: th,
+              width: inferW,
+              height: inferH,
               channels: ch,
             });
-            // accumulate (average)
-            for (let ty = 0; ty < th; ty++) {
-              const gy = y + ty;
-              for (let tx = 0; tx < tw; tx++) {
-                const gx = x + tx;
-                const gi = gy * imgW + gx;
-                weight[gi] += 1;
-                const pi = (ty * tw + tx) * ch;
-                const go = gi * ch;
-                for (let c = 0; c < ch; c++) {
-                  sum[go + c] += tileOut.data[pi + c] * scaleFactor;
+            // accumulate
+            if (blendMode === "max" && maxVals) {
+              for (let ty = 0; ty < th; ty++) {
+                const gy = y + ty;
+                for (let tx = 0; tx < tw; tx++) {
+                  const gx = x + tx;
+                  const gi = gy * imgW + gx;
+                  const pi = (ty * inferW + tx) * ch;
+                  const go = gi * ch;
+                  for (let c = 0; c < ch; c++) {
+                    const v = tileOut.data[pi + c] * scaleFactor;
+                    if (v > maxVals[go + c]) maxVals[go + c] = v;
+                  }
+                }
+              }
+            } else {
+              for (let ty = 0; ty < th; ty++) {
+                const gy = y + ty;
+                for (let tx = 0; tx < tw; tx++) {
+                  const gx = x + tx;
+                  const gi = gy * imgW + gx;
+                  const pi = (ty * inferW + tx) * ch;
+                  const go = gi * ch;
+                  let w = 1;
+                  if (blendMode === "feather") {
+                    const distX = Math.min(tx + 1, tw - tx);
+                    const distY = Math.min(ty + 1, th - ty);
+                    w = Math.max(1, distX * distY);
+                  }
+                  weight[gi] += w;
+                  for (let c = 0; c < ch; c++) {
+                    sum[go + c] += tileOut.data[pi + c] * scaleFactor * w;
+                  }
                 }
               }
             }
           }
         }
-        // finalize average
+        // finalize
         const outBuf = Buffer.alloc(imgW * imgH * ch);
-        for (let i = 0; i < imgW * imgH; i++) {
-          const w = weight[i] || 1;
-          const base = i * ch;
-          for (let c = 0; c < ch; c++) {
-            const v = Math.max(0, Math.min(255, Math.round(sum[base + c] / w)));
-            outBuf[base + c] = v;
+        if (blendMode === "max" && maxVals) {
+          for (let i = 0; i < imgW * imgH; i++) {
+            const base = i * ch;
+            for (let c = 0; c < ch; c++) {
+              const v = Math.max(
+                0,
+                Math.min(255, Math.round(maxVals[base + c]))
+              );
+              outBuf[base + c] = v;
+            }
+          }
+        } else {
+          for (let i = 0; i < imgW * imgH; i++) {
+            const w = weight[i] || 1;
+            const base = i * ch;
+            for (let c = 0; c < ch; c++) {
+              const v = Math.max(
+                0,
+                Math.min(255, Math.round(sum[base + c] / w))
+              );
+              outBuf[base + c] = v;
+            }
           }
         }
         out = sharp(outBuf, {
           raw: { width: imgW, height: imgH, channels: ch },
         });
       } else {
+        // For now, we assume backends consume NHWC; if model.layout === 'nchw', a conversion could be inserted here.
         const result = await backend.infer({
           data: inputTensor.data,
           width: inputTensor.width,
           height: inputTensor.height,
           channels: inputTensor.channels,
+          layout: this.config.model.layout || "nhwc",
         });
         // Convert back to uint8 image for downstream steps (respect denormalize.scale if provided)
         const uint8 = Buffer.alloc(result.data.length);
@@ -294,6 +528,7 @@ export class ImageFlowPipeline {
         });
       }
       tAfterInfer = performance.now();
+      logLine(`inference/done ms=${(tAfterInfer - tAfterPre).toFixed(2)}`);
       if (backend.dispose) await backend.dispose();
     }
 
@@ -494,23 +729,45 @@ export class ImageFlowPipeline {
         rgb[j + 1] = g;
         rgb[j + 2] = b;
       }
-      // Outline overlay (simple boundary detection)
+      // Outline overlay with optional thickness
       if (post.paletteMap.outline?.apply) {
         const color = post.paletteMap.outline.color ?? [255, 0, 0];
         const thickness = Math.max(1, post.paletteMap.outline.thickness ?? 1);
-        // thickness>1 not fully implemented; treat as 1 for now
+        const mask = new Uint8Array(width * height);
         for (let y = 0; y < height; y++) {
           for (let x = 0; x < width; x++) {
             const i = y * width + x;
             const cls = classIdx[i];
             const leftDiff = x > 0 && classIdx[i - 1] !== cls;
             const topDiff = y > 0 && classIdx[i - width] !== cls;
-            if (leftDiff || topDiff) {
-              const j = i * 3;
-              rgb[j] = color[0];
-              rgb[j + 1] = color[1];
-              rgb[j + 2] = color[2];
+            if (leftDiff || topDiff) mask[i] = 1;
+          }
+        }
+        if (thickness > 1) {
+          const r = thickness - 1;
+          const dilated = new Uint8Array(width * height);
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              if (!mask[y * width + x]) continue;
+              for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                  const nx = x + dx;
+                  const ny = y + dy;
+                  if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    dilated[ny * width + nx] = 1;
+                  }
+                }
+              }
             }
+          }
+          for (let i = 0; i < width * height; i++) if (dilated[i]) mask[i] = 1;
+        }
+        for (let i = 0; i < width * height; i++) {
+          if (mask[i]) {
+            const j = i * 3;
+            rgb[j] = color[0];
+            rgb[j + 1] = color[1];
+            rgb[j + 2] = color[2];
           }
         }
       }
@@ -545,7 +802,28 @@ export class ImageFlowPipeline {
       const overlayBuf = await out.clone().ensureAlpha(alpha).png().toBuffer();
       out = base.composite([{ input: overlayBuf, blend: "over" }]);
     }
+
+    // Custom postprocessing hook
+    if (this.config.custom?.postprocessingFn) {
+      try {
+        const abs = path.resolve(
+          process.cwd(),
+          this.config.custom.postprocessingFn
+        );
+        const mod: any = await import(abs);
+        const fn = mod?.default || mod?.postprocess || mod?.run;
+        if (typeof fn === "function") {
+          const maybe = await fn(out.clone());
+          if (maybe && typeof (maybe as any).metadata === "function") {
+            out = maybe as any;
+          }
+        }
+      } catch {
+        // ignore custom postprocessing errors in preview
+      }
+    }
     const tAfterPost = performance.now();
+    logLine(`postprocess/done ms=${(tAfterPost - tAfterInfer).toFixed(2)}`);
 
     // Output saving
     const output = this.config.output;
@@ -608,7 +886,10 @@ export class ImageFlowPipeline {
           const chSharp = sharp(chBuf, { raw: { width, height, channels: 1 } });
           const chTarget = path.join(dir, `${base}_${chName}.${ext}`);
           if (format === "png") {
-            await chSharp.png({ compressionLevel: 9 }).toFile(chTarget);
+            const bd = output.save.bitDepth as any as number | undefined;
+            const pngOpts: any = { compressionLevel: 9 };
+            if (bd === 8 || bd === 16) pngOpts.bitdepth = bd as any;
+            await chSharp.png(pngOpts).toFile(chTarget);
           } else if (format === "jpeg") {
             await chSharp
               .jpeg({ quality: output.save.quality ?? 90 })
@@ -618,47 +899,51 @@ export class ImageFlowPipeline {
               .webp({ quality: output.save.quality ?? 90 })
               .toFile(chTarget);
           } else if (format === "tiff") {
-            await chSharp
-              .tiff({
-                quality: output.save.quality ?? 90,
-                bitdepth: (output.save.bitDepth as any) ?? 8,
-              })
-              .toFile(chTarget);
+            const bd = output.save.bitDepth as any as number | undefined;
+            const tiffOpts: any = { quality: output.save.quality ?? 90 };
+            if (bd === 1 || bd === 2 || bd === 4 || bd === 8)
+              tiffOpts.bitdepth = bd as any;
+            await chSharp.tiff(tiffOpts).toFile(chTarget);
           } else {
             await chSharp.toFile(chTarget);
           }
         }
         // Also save the combined multi-channel image
         if (format === "png") {
-          await out.png({ compressionLevel: 9 }).toFile(target);
+          const bd = output.save.bitDepth as any as number | undefined;
+          const pngOpts: any = { compressionLevel: 9 };
+          if (bd === 8 || bd === 16) pngOpts.bitdepth = bd as any;
+          await out.png(pngOpts).toFile(target);
         } else if (format === "jpeg") {
           await out.jpeg({ quality: output.save.quality ?? 90 }).toFile(target);
         } else if (format === "webp") {
           await out.webp({ quality: output.save.quality ?? 90 }).toFile(target);
         } else if (format === "tiff") {
-          await out
-            .tiff({
-              quality: output.save.quality ?? 90,
-              bitdepth: (output.save.bitDepth as any) ?? 8,
-            })
-            .toFile(target);
+          const bd = output.save.bitDepth as any as number | undefined;
+          const tiffOpts: any = { quality: output.save.quality ?? 90 };
+          if (bd === 1 || bd === 2 || bd === 4 || bd === 8)
+            tiffOpts.bitdepth = bd as any;
+          await out.tiff(tiffOpts).toFile(target);
         } else {
           await out.toFile(target);
         }
+        logLine(`save/done path=${target}`);
       } else {
         if (format === "png") {
-          await out.png({ compressionLevel: 9 }).toFile(target);
+          const bd = output.save.bitDepth as any as number | undefined;
+          const pngOpts: any = { compressionLevel: 9 };
+          if (bd === 8 || bd === 16) pngOpts.bitdepth = bd as any;
+          await out.png(pngOpts).toFile(target);
         } else if (format === "jpeg") {
           await out.jpeg({ quality: output.save.quality ?? 90 }).toFile(target);
         } else if (format === "webp") {
           await out.webp({ quality: output.save.quality ?? 90 }).toFile(target);
         } else if (format === "tiff") {
-          await out
-            .tiff({
-              quality: output.save.quality ?? 90,
-              bitdepth: (output.save.bitDepth as any) ?? 8,
-            })
-            .toFile(target);
+          const bd = output.save.bitDepth as any as number | undefined;
+          const tiffOpts: any = { quality: output.save.quality ?? 90 };
+          if (bd === 1 || bd === 2 || bd === 4 || bd === 8)
+            tiffOpts.bitdepth = bd as any;
+          await out.tiff(tiffOpts).toFile(target);
         } else {
           await out.toFile(target);
         }
@@ -671,6 +956,10 @@ export class ImageFlowPipeline {
           this.config.visualization.outputPath || output.save.path || dir
         );
         if (!fs.existsSync(vizDir)) fs.mkdirSync(vizDir, { recursive: true });
+        const vizAlpha = Math.max(
+          0,
+          Math.min(1, this.config.visualization?.alpha ?? 0.5)
+        );
         if (vizType === "sideBySide") {
           const outMeta = await out.metadata();
           const w = outMeta.width ?? 0;
@@ -736,7 +1025,11 @@ export class ImageFlowPipeline {
             .resize({ width: w, height: h, fit: "fill" })
             .png()
             .toBuffer();
-          const overlay = await out.clone().ensureAlpha(0.5).png().toBuffer();
+          const overlay = await out
+            .clone()
+            .ensureAlpha(vizAlpha)
+            .png()
+            .toBuffer();
           const viz = sharp(base)
             .composite([{ input: overlay, blend: "over" }])
             .png();
@@ -809,6 +1102,36 @@ export class ImageFlowPipeline {
           },
         };
         fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+      }
+      // Write logs if requested
+      if (this.config.logging?.saveLogs) {
+        try {
+          const logPath = this.config.logging.logPath
+            ? path.resolve(process.cwd(), this.config.logging.logPath)
+            : path.resolve(process.cwd(), "logs/inference.log");
+          const ldir = path.dirname(logPath);
+          if (!fs.existsSync(ldir)) fs.mkdirSync(ldir, { recursive: true });
+          const totalMs = performance.now() - tStart;
+          logs.push(
+            `[${new Date().toISOString()}] total ms=${totalMs.toFixed(2)}`
+          );
+          const level = (this.config.logging.level || "info") as
+            | "debug"
+            | "info"
+            | "error";
+          let lines = logs;
+          if (level === "error") {
+            lines = logs.filter((l) => l.includes("total ms="));
+          } else if (level === "info") {
+            lines = logs.filter(
+              (l) =>
+                l.includes("/done") ||
+                l.includes("pipeline/start") ||
+                l.includes("total ms=")
+            );
+          }
+          fs.writeFileSync(logPath, lines.join("\n"), "utf-8");
+        } catch {}
       }
       // Optionally save raw tensor from the output image as [H,W,C] uint8 NPY
       if (

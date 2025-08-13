@@ -48,6 +48,26 @@ Create `examples/palette.json` containing an array of RGB triplets, e.g.:
 
 ## float32-raw.json
 
+## tiling.json
+
+- Demonstrates tiled inference with overlap averaging.
+
+Run:
+
+```
+imageflowio --config examples/tiling.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
+## grayscale-float.json
+
+- Demonstrates requesting a grayscale float input (format.channels: 1) for backends.
+
+Run:
+
+```
+imageflowio --config examples/grayscale-float.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
 - Demonstrates saving raw NPY with `dtype: "float32"`.
 
 Run:
@@ -60,3 +80,23 @@ Notes:
 
 - You can override input/output at runtime with `--input` and `--output`.
 - Environment overrides also work: `IMAGEFLOWIO_BACKEND`, `IMAGEFLOWIO_THREADS`.
+
+## viz-overlay.json
+
+- Demonstrates visualization overlay with adjustable alpha.
+
+Run:
+
+```
+imageflowio --config examples/viz-overlay.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
+## viz-heatmap.json
+
+- Demonstrates visualization heatmap (difference) between input and output.
+
+Run:
+
+```
+imageflowio --config examples/viz-heatmap.json --backend noop --input examples/images/sample.png --output examples/outputs
+```

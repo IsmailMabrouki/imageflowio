@@ -1,0 +1,12 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "noop.onnx" },
+  "input": { "type": "image", "source": "./examples/images/sample.png" },
+  "preprocessing": {
+    "format": { "dataType": "float32", "channels": 1, "channelOrder": "rgb" },
+    "normalize": { "apply": false }
+  },
+  "output": {
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" }
+  }
+}

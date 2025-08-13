@@ -136,6 +136,10 @@ async function validateConfig(
   const Ajv2020 = require("ajv/dist/2020")
     .default as typeof import("ajv/dist/2020").default;
   const ajv = new Ajv2020({ allErrors: true, strict: false });
+  try {
+    const meta2020 = require("ajv/dist/refs/json-schema-2020-12.json");
+    ajv.addMetaSchema(meta2020);
+  } catch {}
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
   const validate = ajv.compile(schema);
 

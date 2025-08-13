@@ -9,7 +9,7 @@ This document captures issues observed while using `imageflowio@0.0.1` and propo
   - Symptom: “no schema with key or ref https://json-schema.org/draft/2020-12/schema”.
   - Cause: Ajv 8 doesn’t bundle 2020-12 metaschema by default.
   - Fix options:
-    - Add metaschema before compile:
+    - Add metaschema before compile (now implemented in CLI):
       ```ts
       import Ajv from "ajv";
       import meta2020 from "ajv/dist/refs/json-schema-2020-12.json";
@@ -17,7 +17,7 @@ This document captures issues observed while using `imageflowio@0.0.1` and propo
       ajv.addMetaSchema(meta2020);
       ```
     - Or change packaged `config.schema.json` to draft-07 (`"$schema": "http://json-schema.org/draft-07/schema#"`).
-  - Prefer keeping 2020-12 + add metaschema.
+  - Prefer keeping 2020-12 + add metaschema (done).
 
 - Root $schema in config vs schema restrictions
   - Symptom: “data must NOT have additional properties” when user includes `$schema` in `config.json`.
@@ -53,8 +53,8 @@ This document captures issues observed while using `imageflowio@0.0.1` and propo
   - `--dry-run` to validate and show an execution plan without writing files.
 
 - Logging
-  - Respect `logging.level` at runtime (currently only a verbose boolean is used).
-  - Add `--log-file` override to force logs to file regardless of config.
+  - Respect `logging.level` at runtime (implemented: debug/info/error filtering).
+  - `--log-file` override supported and tested.
 
 ### Docs consistency
 

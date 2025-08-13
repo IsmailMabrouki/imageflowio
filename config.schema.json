@@ -14,7 +14,8 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
-        "path": { "type": "string" }
+        "path": { "type": "string" },
+        "layout": { "type": "string", "enum": ["nhwc", "nchw"] }
       },
       "required": ["path"]
     },
@@ -22,7 +23,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "backend": { "type": "string", "enum": ["auto", "cpu", "gpu"] },
+        "backend": { "type": "string", "enum": ["auto", "onnx", "noop"] },
         "threads": {
           "type": "object",
           "additionalProperties": false,
@@ -257,7 +258,7 @@
               "type": "string",
               "enum": ["png", "jpeg", "webp", "tiff"]
             },
-            "bitDepth": { "type": "integer", "enum": [8, 16, 32] },
+            "bitDepth": { "type": "integer", "enum": [1, 2, 4, 8, 16] },
             "colorSpace": { "type": "string", "enum": ["srgb", "linear"] },
             "linearToSRGB": { "type": "boolean" },
             "splitChannels": { "type": "boolean" },
@@ -271,7 +272,7 @@
           "additionalProperties": false,
           "properties": {
             "apply": { "type": "boolean" },
-            "format": { "type": "string", "enum": ["npy", "npz", "bin"] },
+            "format": { "type": "string", "enum": ["npy", "bin"] },
             "dtype": { "type": "string", "enum": ["uint8", "float32"] },
             "path": { "type": "string" }
           }
@@ -312,7 +313,8 @@
           "type": "string",
           "enum": ["sideBySide", "overlay", "heatmap", "difference"]
         },
-        "outputPath": { "type": "string" }
+        "outputPath": { "type": "string" },
+        "alpha": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     }
   },

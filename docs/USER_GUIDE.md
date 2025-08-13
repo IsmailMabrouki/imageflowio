@@ -61,11 +61,12 @@ const { outputPath } = await pipeline.run({ backend: "auto", threads: "auto" });
 Key sections:
 
 - `model`: `path` to model (e.g., `./assets/models/model.onnx`)
-- `execution`: `backend: auto|cpu|gpu` (auto uses best available), `threads`
+- `execution`: `backend: auto|onnx|noop` (auto chooses based on model path), `threads`
 - `preprocessing`: `resize`, `normalize` (mean/std), `format` (dtype, channels, channelOrder)
-- `inference`: `tiling` (planned)
+- `inference`: `tiling` (implemented: averaging blend)
+  - Tiling options: `tileSize`, `overlap`, `blend` (average | feather | max), and `padMode` (reflect | edge | zero)
 - `postprocessing`: `resizeTo`, `activation`, `clamp`, `denormalize`, `colorMap` (grayscale, viridis, magma, plasma), `paletteMap` (preset/inline/file + optional outline), `toneMap` (luminance-based)
-- `output`: `save` (png/jpeg/webp/tiff), `writeMeta` (timings and sizes), `saveRaw` (NPY)
+- `output`: `save` (png/jpeg/webp/tiff), `writeMeta` (timings and sizes), `saveRaw` (NPY/BIN; NPY can be float32 normalized [0,1])
 
 ## Backends
 
@@ -79,7 +80,8 @@ Key sections:
 - Threads: set `execution.threads.count` or `run({ threads })`
 - Float path: enable `format.dataType: "float32"` and `normalize` if your model expects it
 - Denormalize scale: set `postprocessing.denormalize.scale` (applied to backend float outputs)
-- Warmup: `execution.warmupRuns` (declared, implementation may vary per backend)
+- Warmup: `execution.warmupRuns` warms the backend before timed runs
+- Layout: `model.layout` can hint NCHW vs NHWC for ONNX models (conversion handled internally when possible)
 - Persistent sessions: MVP loads per run; pooling/warm sessions can be added later
 
 ## Examples
@@ -87,6 +89,10 @@ Key sections:
 - See `examples/README.md`
   - `examples/palette-file.json`: palette from JSON + raw BIN
   - `examples/float32-raw.json`: save NPY as float32
+  - `examples/basic-noop.json`: end-to-end preview without a model
+  - `examples/viz-overlay.json` and `examples/viz-heatmap.json`: visualization outputs
+  - `examples/tiling.json`: tiled inference (overlap/padding)
+  - `examples/grayscale-float.json`: grayscale float input
 - Try without a model:
 
 ```
@@ -98,6 +104,7 @@ imageflowio --config examples/basic-noop.json --backend noop --input examples/im
 - "Failed to load onnxruntime-node": install it with `npm install onnxruntime-node` and retry
 - Schema errors: ensure `"$schema": "./config.schema.json"` and fields match `docs/CONFIG.md`
   - If you use `saveRaw.dtype: "float32"`, NPY will be normalized to [0,1]; BIN always writes raw bytes.
+- Visualization files are created alongside output by default (or in `visualization.outputPath`). Modes: sideBySide, difference, overlay, heatmap.
 - Windows: if `sharp` install fails, ensure build tools are present or use prebuilt binaries (Node >= 18)
 - Node engine: ensure `node -v` is >= 18
 

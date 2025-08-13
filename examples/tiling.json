@@ -1,0 +1,15 @@
+{
+  "$schema": "../config.schema.json",
+  "model": { "path": "noop.onnx" },
+  "input": { "type": "image", "source": "./examples/images/sample.png" },
+  "preprocessing": {
+    "format": { "dataType": "float32", "channels": 3, "channelOrder": "rgb" },
+    "normalize": { "apply": false }
+  },
+  "inference": {
+    "tiling": { "apply": true, "tileSize": [128, 128], "overlap": 16 }
+  },
+  "output": {
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" }
+  }
+}
