@@ -326,47 +326,58 @@ async function validateConfig(
 async function runBenchmarks(options: CliOptions): Promise<void> {
   try {
     // Import benchmark suite
-    const { BackendComparisonSuite } = await import('./benchmark/suites/backend-comparison.js');
-    
+    const { BackendComparisonSuite } = await import(
+      "./benchmark/suites/backend-comparison.js"
+    );
+
     const suite = new BackendComparisonSuite();
-    const benchmarkType = options.benchmarkType || 'backend';
+    const benchmarkType = options.benchmarkType || "backend";
     const iterations = options.benchmarkIterations || 100;
     const warmup = options.benchmarkWarmup || 10;
-    const format = options.benchmarkFormat || 'json';
-    const outputPath = options.benchmarkOutput || `./benchmark-results-${Date.now()}.${format}`;
+    const format = options.benchmarkFormat || "json";
+    const outputPath =
+      options.benchmarkOutput || `./benchmark-results-${Date.now()}.${format}`;
 
     console.log(`Running ${benchmarkType} benchmarks...`);
-    console.log(`Iterations: ${iterations}, Warmup: ${warmup}, Format: ${format}`);
+    console.log(
+      `Iterations: ${iterations}, Warmup: ${warmup}, Format: ${format}`
+    );
 
     let results: any[] = [];
 
     switch (benchmarkType) {
-      case 'backend':
+      case "backend":
         results = await suite.runClassificationBenchmarks({
-          models: ['resnet50', 'mobilenet'],
-          backends: ['onnx', 'tfjs', 'noop'],
-          imageSizes: [[224, 224], [512, 512]],
+          models: ["resnet50", "mobilenet"],
+          backends: ["onnx", "tfjs", "noop"],
+          imageSizes: [
+            [224, 224],
+            [512, 512],
+          ],
           iterations,
-          warmupRuns: warmup
+          warmupRuns: warmup,
         });
         break;
-      
-      case 'pipeline':
+
+      case "pipeline":
         results = await suite.runPreprocessingBenchmarks();
         break;
-      
-      case 'all':
+
+      case "all":
         const backendResults = await suite.runClassificationBenchmarks({
-          models: ['resnet50', 'mobilenet'],
-          backends: ['onnx', 'tfjs', 'noop'],
-          imageSizes: [[224, 224], [512, 512]],
+          models: ["resnet50", "mobilenet"],
+          backends: ["onnx", "tfjs", "noop"],
+          imageSizes: [
+            [224, 224],
+            [512, 512],
+          ],
           iterations,
-          warmupRuns: warmup
+          warmupRuns: warmup,
         });
         const pipelineResults = await suite.runPreprocessingBenchmarks();
         results = [...backendResults, ...pipelineResults];
         break;
-      
+
       default:
         console.error(`Unknown benchmark type: ${benchmarkType}`);
         process.exit(1);
@@ -374,21 +385,24 @@ async function runBenchmarks(options: CliOptions): Promise<void> {
 
     // Generate report
     const report = await suite.generateComparisonReport(results, {
-      format: format as 'json' | 'html' | 'csv',
-      outputPath
+      format: format as "json" | "html" | "csv",
+      outputPath,
     });
 
     console.log(`Benchmark completed. Results saved to: ${outputPath}`);
-    
-    if (format === 'json') {
-      console.log('\nSummary:');
-      results.forEach(result => {
-        console.log(`${result.name}: ${result.throughput.toFixed(2)} ops/sec, ${result.averageTime.toFixed(2)}ms avg`);
+
+    if (format === "json") {
+      console.log("\nSummary:");
+      results.forEach((result) => {
+        console.log(
+          `${result.name}: ${result.throughput.toFixed(
+            2
+          )} ops/sec, ${result.averageTime.toFixed(2)}ms avg`
+        );
       });
     }
-
   } catch (error) {
-    console.error('Benchmark failed:', error);
+    console.error("Benchmark failed:", error);
     process.exit(1);
   }
 }
