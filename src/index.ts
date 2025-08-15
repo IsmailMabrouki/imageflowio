@@ -6,3 +6,7 @@ export * from "./backends/noop";
 export * from "./backends/onnx";
 export * from "./backends/tfjs";
 export * from "./utils/tensor";
+
+// JavaScript API
+export { ImageFlowIO } from "./api";
+export * from "./types/api";

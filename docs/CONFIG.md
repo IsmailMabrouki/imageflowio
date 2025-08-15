@@ -121,7 +121,12 @@ This example demonstrates the full flexibility of the configuration for image-to
 
 - **name**: string — Human-readable identifier for the model (e.g., `"unet"`).
 - **path**: string — Local or remote path/URL to the model artifact (e.g., ONNX/TFJS).
-- **layout**: "nhwc" | "nchw" — Optional model tensor layout hint (currently informational).
+- **layout**: "nhwc" | "nchw" — Optional model tensor layout hint.
+  - **"nhwc"** (default): Channels-last format [N, H, W, C] - common for TensorFlow models
+  - **"nchw"**: Channels-first format [N, C, H, W] - common for PyTorch models
+  - **When to use**: Set this to match your model's expected input format for optimal performance
+  - **Automatic conversion**: Backends automatically convert between layouts when needed
+  - **Performance**: Correct layout hint avoids unnecessary tensor conversions
 - **inputName**: string — Optional backend-specific input tensor name (ONNX/TFJS).
 - **outputName**: string — Optional backend-specific output tensor name (ONNX/TFJS).
 
@@ -132,8 +137,16 @@ This example demonstrates the full flexibility of the configuration for image-to
   - **apply**: boolean — Enable or disable multithreading.
   - **count**: number | "auto" — Thread count; `"auto"` uses available cores.
 - **warmupRuns**: number — Number of warmup inferences before timed runs (stabilizes performance).
-- **useCaching**: boolean | "memory" | "disk" — Cache preprocessed inputs to accelerate repeated inferences. When set to "disk", preprocessed tiles are stored under `cacheDir`.
+- **useCaching**: boolean | "memory" | "disk" — Cache preprocessed inputs to accelerate repeated inferences.
+  - **`true` or `"memory"`**: Cache in memory (fastest, uses RAM)
+  - **`"disk"`**: Cache to disk (persistent across runs, uses disk space)
+  - **`false`**: No caching (default)
+  - **Performance**: Memory cache > Disk cache > No cache
+  - **Persistence**: Disk cache survives process restarts
 - **cacheDir**: string — Directory to store disk cache when `useCaching: "disk"` (default: `.imageflowio-cache`).
+  - **Location**: Relative to current working directory
+  - **Structure**: Contains `.json` metadata and `.bin` binary files
+  - **Cleanup**: Manual cleanup required (not automatically managed)
 
 ### input
 
@@ -275,8 +288,77 @@ The output section controls how results are saved. Different model types use dif
 
 ### custom
 
-- **preprocessingFn**: string — Path to a JS module exporting a custom preprocessing function.
-- **postprocessingFn**: string — Path to a JS module exporting a custom postprocessing function.
+The custom section allows you to inject custom JavaScript functions into the pipeline for advanced preprocessing and postprocessing operations.
+
+#### preprocessingFn
+
+- **Type**: string — Path to a JS module exporting a custom preprocessing function.
+- **When called**: After standard preprocessing but before tensor conversion.
+- **Input**: Sharp image object
+- **Output**: Sharp image object
+- **Use cases**: Custom filters, color adjustments, image transformations
+
+#### postprocessingFn
+
+- **Type**: string — Path to a JS module exporting a custom postprocessing function.
+- **When called**: After model inference but before output saving.
+- **Input**: Sharp image object
+- **Output**: Sharp image object
+- **Use cases**: Custom color correction, watermarking, final adjustments
+
+#### Function Interface
+
+Custom functions should export a default function or named exports (`preprocess`/`postprocess`/`run`):
+
+```javascript
+// Method 1: Default export
+export default async function customFunction(image) {
+  // Your custom logic here
+  return modifiedImage;
+}
+
+// Method 2: Named exports
+export const preprocess = async (image) => {
+  /* ... */
+};
+export const postprocess = async (image) => {
+  /* ... */
+};
+export const run = async (image) => {
+  /* ... */
+};
+```
+
+#### Examples
+
+**Custom preprocessing** (brightness adjustment):
+
+```javascript
+export default async function customPreprocess(image) {
+  return image.modulate({
+    brightness: 1.2, // Increase brightness by 20%
+    saturation: 0.8, // Reduce saturation by 20%
+  });
+}
+```
+
+**Custom postprocessing** (color correction):
+
+```javascript
+export default async function customPostprocess(image) {
+  return image.modulate({
+    brightness: 1.1,
+    contrast: 1.2,
+    saturation: 1.1,
+  });
+}
+```
+
+#### Error Handling
+
+- Custom function errors are silently ignored in preview mode
+- Functions should return a valid Sharp image object
+- Use try-catch blocks in your custom functions for robust error handling
 
 ### logging
 

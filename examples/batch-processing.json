@@ -1,0 +1,57 @@
+{
+  "$schema": "../config.schema.json",
+  "model": {
+    "name": "batch-example",
+    "path": "./assets/models/model.onnx"
+  },
+  "input": {
+    "type": "image",
+    "source": "./examples/images/batch-inputs/"
+  },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [512, 512],
+      "keepAspectRatio": true,
+      "resizeMode": "fit"
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.5, 0.5, 0.5],
+      "std": [0.5, 0.5, 0.5]
+    },
+    "format": {
+      "dataType": "float32",
+      "channels": 3,
+      "channelOrder": "rgb"
+    }
+  },
+  "inference": {
+    "batchSize": 1
+  },
+  "postprocessing": {
+    "denormalize": {
+      "apply": true,
+      "scale": 255,
+      "dtype": "uint8"
+    },
+    "resizeTo": "input"
+  },
+  "output": {
+    "save": {
+      "apply": true,
+      "path": "./examples/outputs/batch-results",
+      "format": "png",
+      "filename": "{model}_{timestamp}_{index}.png"
+    },
+    "writeMeta": {
+      "apply": true,
+      "jsonPath": "./examples/outputs/batch-results/batch-meta.json"
+    }
+  },
+  "logging": {
+    "level": "info",
+    "saveLogs": true,
+    "logPath": "./examples/outputs/batch-results/batch.log"
+  }
+}

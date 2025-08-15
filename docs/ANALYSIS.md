@@ -191,7 +191,7 @@ imageflowio --config config.json --input image.jpg
 
 **Advanced Features**
 
-- Custom preprocessing/postprocessing hooks: ❌ Schema defined but not implemented
+- Custom preprocessing/postprocessing hooks: ✅ Implemented and documented
 - Advanced caching strategies: ⚠️ Basic implementation
 - Model quantization support: ❌ Not implemented
 

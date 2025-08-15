@@ -54,6 +54,7 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
 ### Documentation
 
 - **Library Analysis**: [docs/ANALYSIS.md](docs/ANALYSIS.md) - Comprehensive overview of what ImageFlowIO does, benefits, target users, and improvement areas
+- **JavaScript API**: [docs/API.md](docs/API.md) - Developer-friendly JavaScript/TypeScript API for ML inference
 - Configuration reference and example: [docs/CONFIG.md](docs/CONFIG.md)
 - JSON Schema for validation/IDE autocompletion: [config.schema.json](config.schema.json)
 - CLI usage: [docs/CLI.md](docs/CLI.md)
@@ -91,6 +92,34 @@ ImageFlowIO supports various ML model types:
   - Use `output.save` for mask images
   - Use `output.paletteMap` for colored segmentation
   - Example: DeepLab, Mask R-CNN
+
+### Advanced Features
+
+- **JavaScript API** - Developer-friendly programmatic interface
+
+  ```javascript
+  import { ImageFlowIO } from "imageflowio";
+
+  const flow = new ImageFlowIO();
+  const result = await flow.classify({
+    modelPath: "./model.onnx",
+    imagePath: "./image.jpg",
+    outputPath: "./results.json",
+  });
+  ```
+
+- **Custom Functions** - Inject custom JavaScript for preprocessing/postprocessing
+
+  - Use `custom.preprocessingFn` for custom image transformations
+  - Use `custom.postprocessingFn` for custom output adjustments
+  - Example: Custom filters, color corrections, watermarking
+
+- **Batch Processing** - Process multiple images in parallel
+  - Use `--concurrency` flag for parallel processing
+  - Automatic batch summary generation
+  - Progress reporting for large datasets
+  - Process entire directories of images
+  - Automatic `summary.json` generation with statistics
 
 ### Example Configurations
 
@@ -185,23 +214,37 @@ imageflowio --config examples/basic-noop.json --backend noop --input examples/im
 
 ### Backends
 
-- ONNX Runtime Node (recommended for ONNX models)
+ImageFlowIO supports multiple inference backends optimized for different use cases:
 
-  - Install: `npm install onnxruntime-node`
-  - Use in config: `execution.backend: "onnx"`
-  - CLI: `--backend onnx`
-  - Auto-detection: when `model.path` ends with `.onnx`, `backend: "auto"` selects ONNX
+#### ONNX Runtime (Recommended)
 
-- TensorFlow.js (optional, preview)
+- **Best for**: Production deployments, high-performance inference
+- **Install**: `npm install onnxruntime-node`
+- **Config**: `execution.backend: "onnx"`
+- **CLI**: `--backend onnx`
+- **Features**: Session caching, layout conversion, optimized C++ runtime
 
-  - Install: `npm install @tensorflow/tfjs-node` (preferred) or `@tensorflow/tfjs`
-  - Use in config: `execution.backend: "tfjs"`
-  - CLI: `--backend tfjs`
-  - Expects TFJS Graph or Layers models saved to disk (e.g., directory containing `model.json` and weights)
+#### TensorFlow.js (Preview)
 
-- Noop (preview pipeline without ML)
-  - Use in config: `execution.backend: "noop"`
-  - CLI: `--backend noop`
+- **Best for**: TFJS models, web deployment, prototyping
+- **Install**: `npm install @tensorflow/tfjs-node` (preferred) or `@tensorflow/tfjs`
+- **Config**: `execution.backend: "tfjs"`
+- **CLI**: `--backend tfjs`
+- **Features**: Graph/Layers models, JavaScript runtime
+
+#### Noop (Testing)
+
+- **Best for**: Testing, validation, preprocessing verification
+- **Install**: No additional installation required
+- **Config**: `execution.backend: "noop"`
+- **CLI**: `--backend noop`
+- **Features**: Identity transform, perfect for pipeline validation
+
+**Auto-detection**: When `model.path` ends with `.onnx`, `backend: "auto"` selects ONNX.
+
+**Performance**: ONNX Runtime > TensorFlow.js > Noop
+
+See [Backend Comparison Guide](docs/BACKENDS.md) for detailed capabilities, performance benchmarks, and selection criteria.
 
 Notes:
 
@@ -254,6 +297,31 @@ Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` s
 - Schema: Enhanced JSON Schema with comprehensive descriptions, examples, and default values for better IDE autocompletion
 - Docs: added [docs/ERRORS.md](docs/ERRORS.md) with error classes and diagnostics overview
 
+### Ecosystem Integrations (Coming Soon)
+
+ImageFlowIO is designed to integrate seamlessly with popular frameworks and build tools. We're working on the following integrations:
+
+#### **Phase 1: Framework Integrations**
+
+- **Express Middleware** (`@imageflowio/express`) - File upload handling, automatic model loading
+- **Next.js Plugin** (`@imageflowio/next`) - API route helpers, image optimization integration
+- **Fastify Plugin** (`@imageflowio/fastify`) - Plugin architecture, schema validation
+- **Koa Middleware** (`@imageflowio/koa`) - Middleware pattern, context extension
+
+#### **Phase 2: Build Tool Integrations**
+
+- **Vite Plugin** (`@imageflowio/vite`) - Asset optimization, HMR support
+- **Webpack Loader** (`@imageflowio/webpack`) - Image processing during build
+- **Rollup Plugin** (`@imageflowio/rollup`) - Tree-shaking, bundle analysis
+
+#### **Phase 3: Advanced Integrations**
+
+- **Nuxt Module** (`@imageflowio/nuxt`) - Server-side and client-side support
+- **Remix Integration** (`@imageflowio/remix`) - Loader and action helpers
+- **GraphQL Integration** (`@imageflowio/graphql`) - Custom scalars, resolver helpers
+
+See [Ecosystem Integration Plan](docs/ECOSYSTEM_INTEGRATION.md) for detailed roadmap and implementation strategy.
+
 ### Feature support matrix (selected)
 
 | Area           | Feature                                           | Status |
@@ -278,6 +346,35 @@ Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` s
 | Testing        | TFJS integration test (guarded)                   | Done   |
 | Schema         | Enhanced descriptions, examples, defaults         | Done   |
 | Error Handling | Structured validation with detailed error paths   | Done   |
+
+### Troubleshooting
+
+Common issues and solutions:
+
+**Configuration Errors**
+
+- Use `--validate-only` to check config before running
+- Add `$schema` reference for IDE autocompletion
+- Check required fields: `model.path`, `input.source`
+
+**Backend Issues**
+
+- ONNX: Install `npm install onnxruntime-node`
+- TFJS: Install `npm install @tensorflow/tfjs-node`
+- Use `--backend noop` to test preprocessing/postprocessing
+
+**Performance Issues**
+
+- Enable tiling for large images
+- Use `--concurrency` for batch processing
+- Enable caching with `execution.useCaching`
+- Use memory caching for repeated runs, disk caching for persistence
+
+**Debugging**
+
+- Use `--log-level debug --log-file debug.log`
+- Check `examples/error-handling.md` for detailed troubleshooting
+- Validate with `--errors json` for structured error output
 
 ### License
 

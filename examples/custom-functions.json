@@ -1,0 +1,51 @@
+{
+  "$schema": "../config.schema.json",
+  "model": {
+    "name": "custom-example",
+    "path": "./assets/models/model.onnx"
+  },
+  "input": {
+    "type": "image",
+    "source": "./examples/images/sample.png"
+  },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [512, 512],
+      "keepAspectRatio": true
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.5, 0.5, 0.5],
+      "std": [0.5, 0.5, 0.5]
+    },
+    "format": {
+      "dataType": "float32",
+      "channels": 3,
+      "channelOrder": "rgb"
+    }
+  },
+  "inference": {
+    "batchSize": 1
+  },
+  "postprocessing": {
+    "denormalize": {
+      "apply": true,
+      "scale": 255,
+      "dtype": "uint8"
+    },
+    "resizeTo": "input"
+  },
+  "custom": {
+    "preprocessingFn": "./examples/custom/preprocess.js",
+    "postprocessingFn": "./examples/custom/postprocess.js"
+  },
+  "output": {
+    "save": {
+      "apply": true,
+      "path": "./examples/outputs",
+      "format": "png",
+      "filename": "custom_{timestamp}.png"
+    }
+  }
+}

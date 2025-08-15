@@ -294,6 +294,7 @@ __export(src_exports, {
   BackendLoadError: () => BackendLoadError,
   ConfigValidationError: () => ConfigValidationError,
   ImageFlowError: () => ImageFlowError,
+  ImageFlowIO: () => ImageFlowIO,
   ImageFlowPipeline: () => ImageFlowPipeline,
   InferenceError: () => InferenceError,
   NoopBackend: () => NoopBackend,
@@ -1744,11 +1745,438 @@ var ImageFlowPipeline = _ImageFlowPipeline;
 // src/index.ts
 init_errors();
 init_tfjs();
+
+// src/api.ts
+var path3 = __toESM(require("path"));
+var ImageFlowIO = class {
+  constructor() {
+    this.defaultPreprocessing = {};
+    this.defaultOutput = {};
+  }
+  /**
+   * Set default preprocessing configuration
+   */
+  setPreprocessing(config) {
+    this.defaultPreprocessing = { ...this.defaultPreprocessing, ...config };
+  }
+  /**
+   * Set default output configuration
+   */
+  setOutput(config) {
+    this.defaultOutput = { ...this.defaultOutput, ...config };
+  }
+  /**
+   * Classify an image using a classification model
+   */
+  async classify(options) {
+    const config = this.generateClassificationConfig(options);
+    const result = await this.runPipeline(config, options.imagePath);
+    return this.processClassificationResult(result, options);
+  }
+  /**
+   * Segment an image using a segmentation model
+   */
+  async segment(options) {
+    const config = this.generateSegmentationConfig(options);
+    const result = await this.runPipeline(config, options.imagePath);
+    return this.processSegmentationResult(result, options);
+  }
+  /**
+   * Detect objects in an image using a detection model
+   */
+  async detect(options) {
+    const config = this.generateDetectionConfig(options);
+    const result = await this.runPipeline(config, options.imagePath);
+    return this.processDetectionResult(result, options);
+  }
+  /**
+   * Enhance an image using an image-to-image model
+   */
+  async enhance(options) {
+    const config = this.generateEnhancementConfig(options);
+    const result = await this.runPipeline(config, options.imagePath);
+    return this.processEnhancementResult(result, options);
+  }
+  /**
+   * Process multiple images in batch
+   */
+  async batchClassify(options) {
+    const config = this.generateClassificationConfig(options);
+    return this.runBatchPipeline(config, options);
+  }
+  /**
+   * Auto-generate configuration based on model analysis
+   */
+  async autoGenerateConfig(options) {
+    const modelInfo = await this.analyzeModel(options.modelPath);
+    const config = this.generateConfigFromModelInfo(modelInfo, options);
+    return {
+      config,
+      modelInfo,
+      suggestions: this.generateSuggestions(modelInfo, options)
+    };
+  }
+  /**
+   * Run with custom configuration
+   */
+  async run(options) {
+    let config = options.customConfig;
+    if (!config) {
+      config = this.generateBaseConfig(options);
+      if (options.configOverrides) {
+        config = this.applyConfigOverrides(config, options.configOverrides);
+      }
+    }
+    return this.runPipeline(config, options.imagePath);
+  }
+  /**
+   * Analyze model to determine type and characteristics
+   */
+  async analyzeModel(modelPath) {
+    const ext = path3.extname(modelPath).toLowerCase();
+    const filename = path3.basename(modelPath, ext).toLowerCase();
+    let type = "image-to-image";
+    let layout = "nhwc";
+    if (filename.includes("class") || filename.includes("resnet") || filename.includes("mobilenet")) {
+      type = "classification";
+      layout = "nchw";
+    } else if (filename.includes("detect") || filename.includes("yolo") || filename.includes("ssd")) {
+      type = "detection";
+      layout = "nhwc";
+    } else if (filename.includes("seg") || filename.includes("unet") || filename.includes("mask")) {
+      type = "segmentation";
+      layout = "nhwc";
+    }
+    return {
+      type,
+      inputShape: [1, 3, 224, 224],
+      // Default assumption
+      outputShape: type === "classification" ? [1, 1e3] : [1, 3, 224, 224],
+      numClasses: type === "classification" ? 1e3 : void 0,
+      layout
+    };
+  }
+  /**
+   * Generate classification configuration
+   */
+  generateClassificationConfig(options) {
+    const baseConfig = this.generateBaseConfig(options);
+    return {
+      ...baseConfig,
+      preprocessing: {
+        ...baseConfig.preprocessing,
+        resize: {
+          apply: true,
+          imageSize: options.resize || [224, 224],
+          keepAspectRatio: false
+        },
+        normalize: {
+          apply: true,
+          mean: options.normalize || [0.485, 0.456, 0.406],
+          // ImageNet
+          std: options.std || [0.229, 0.224, 0.225]
+        }
+      },
+      output: {
+        ...baseConfig.output,
+        saveRaw: {
+          apply: true,
+          format: "npy",
+          path: options.outputDir || "./outputs/raw"
+        },
+        writeMeta: {
+          apply: true,
+          jsonPath: options.outputPath || "./outputs/predictions.json"
+        }
+      }
+    };
+  }
+  /**
+   * Generate segmentation configuration
+   */
+  generateSegmentationConfig(options) {
+    const baseConfig = this.generateBaseConfig(options);
+    return {
+      ...baseConfig,
+      preprocessing: {
+        ...baseConfig.preprocessing,
+        resize: {
+          apply: true,
+          imageSize: options.resize || [512, 512],
+          keepAspectRatio: true
+        },
+        normalize: {
+          apply: true,
+          mean: options.normalize || [0.5, 0.5, 0.5],
+          std: options.std || [0.5, 0.5, 0.5]
+        }
+      },
+      postprocessing: {
+        denormalize: {
+          apply: true,
+          scale: 255,
+          dtype: "uint8"
+        },
+        resizeTo: "input",
+        ...options.colormap && {
+          colorMap: {
+            apply: true,
+            mode: options.colormap,
+            channel: 0
+          }
+        }
+      },
+      output: {
+        ...baseConfig.output,
+        save: {
+          apply: true,
+          path: options.outputDir || "./outputs",
+          format: "png",
+          filename: "segmentation_mask.png"
+        }
+      }
+    };
+  }
+  /**
+   * Generate detection configuration
+   */
+  generateDetectionConfig(options) {
+    const baseConfig = this.generateBaseConfig(options);
+    return {
+      ...baseConfig,
+      preprocessing: {
+        ...baseConfig.preprocessing,
+        resize: {
+          apply: true,
+          imageSize: options.resize || [416, 416],
+          keepAspectRatio: true
+        },
+        normalize: {
+          apply: true,
+          mean: options.normalize || [0.5, 0.5, 0.5],
+          std: options.std || [0.5, 0.5, 0.5]
+        }
+      },
+      output: {
+        ...baseConfig.output,
+        saveRaw: {
+          apply: true,
+          format: "npy",
+          path: options.outputDir || "./outputs/raw"
+        },
+        writeMeta: {
+          apply: true,
+          jsonPath: options.outputPath || "./outputs/detections.json"
+        }
+      }
+    };
+  }
+  /**
+   * Generate enhancement configuration
+   */
+  generateEnhancementConfig(options) {
+    const baseConfig = this.generateBaseConfig(options);
+    return {
+      ...baseConfig,
+      preprocessing: {
+        ...baseConfig.preprocessing,
+        resize: {
+          apply: true,
+          imageSize: options.resize || [512, 512],
+          keepAspectRatio: true
+        },
+        normalize: {
+          apply: true,
+          mean: options.normalize || [0.5, 0.5, 0.5],
+          std: options.std || [0.5, 0.5, 0.5]
+        }
+      },
+      postprocessing: {
+        denormalize: {
+          apply: true,
+          scale: 255,
+          dtype: "uint8"
+        },
+        resizeTo: "input"
+      },
+      output: {
+        ...baseConfig.output,
+        save: {
+          apply: true,
+          path: options.outputDir || "./outputs",
+          format: options.format || "png",
+          quality: options.quality || 95,
+          filename: "enhanced_image.png"
+        }
+      }
+    };
+  }
+  /**
+   * Generate base configuration
+   */
+  generateBaseConfig(options) {
+    return {
+      $schema: "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
+      model: {
+        name: "api-generated",
+        path: options.modelPath,
+        layout: "nhwc"
+      },
+      execution: {
+        backend: options.backend || "auto",
+        threads: {
+          apply: true,
+          count: options.threads || "auto"
+        },
+        warmupRuns: options.warmupRuns || 2,
+        useCaching: options.useCaching || false,
+        ...options.cacheDir && { cacheDir: options.cacheDir }
+      },
+      input: {
+        type: "image",
+        source: options.imagePath
+      },
+      preprocessing: {
+        ...this.defaultPreprocessing,
+        format: {
+          dataType: "float32",
+          channels: 3,
+          channelOrder: "rgb"
+        }
+      },
+      inference: {
+        batchSize: options.batchSize || 1
+      },
+      logging: {
+        level: options.logLevel || "info"
+      }
+    };
+  }
+  /**
+   * Run the pipeline with given configuration
+   */
+  async runPipeline(config, imagePath) {
+    const pipeline = new ImageFlowPipeline(config);
+    return pipeline.run();
+  }
+  /**
+   * Run batch pipeline
+   */
+  async runBatchPipeline(config, options) {
+    throw new Error("Batch processing not yet implemented in API");
+  }
+  /**
+   * Process classification results
+   */
+  processClassificationResult(result, options) {
+    return {
+      topPrediction: "unknown",
+      confidence: 0,
+      topK: [],
+      rawOutput: result.rawOutput,
+      metadata: result.metadata
+    };
+  }
+  /**
+   * Process segmentation results
+   */
+  processSegmentationResult(result, options) {
+    return {
+      maskPath: result.outputPath || "./outputs/segmentation_mask.png",
+      overlayPath: options.overlay ? "./outputs/overlay.png" : void 0,
+      rawOutput: result.rawOutput,
+      metadata: result.metadata
+    };
+  }
+  /**
+   * Process detection results
+   */
+  processDetectionResult(result, options) {
+    return {
+      detections: [],
+      rawOutput: result.rawOutput,
+      metadata: result.metadata
+    };
+  }
+  /**
+   * Process enhancement results
+   */
+  processEnhancementResult(result, options) {
+    return {
+      outputPath: result.outputPath || "./outputs/enhanced_image.png",
+      rawOutput: result.rawOutput,
+      metadata: result.metadata
+    };
+  }
+  /**
+   * Generate configuration from model info
+   */
+  generateConfigFromModelInfo(modelInfo, options) {
+    const baseConfig = this.generateBaseConfig(options);
+    switch (modelInfo.type) {
+      case "classification":
+        return this.generateClassificationConfig({
+          ...options,
+          resize: [224, 224]
+        });
+      case "segmentation":
+        return this.generateSegmentationConfig({
+          ...options,
+          resize: [512, 512]
+        });
+      case "detection":
+        return this.generateDetectionConfig({ ...options, resize: [416, 416] });
+      default:
+        return this.generateEnhancementConfig({
+          ...options,
+          resize: [512, 512]
+        });
+    }
+  }
+  /**
+   * Generate suggestions based on model info
+   */
+  generateSuggestions(modelInfo, options) {
+    const suggestions = [];
+    if (modelInfo.type === "classification") {
+      suggestions.push(
+        "Consider using ImageNet normalization: mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]"
+      );
+      suggestions.push(
+        "Set resize to [224, 224] for most classification models"
+      );
+    }
+    if (modelInfo.type === "segmentation") {
+      suggestions.push("Enable overlay visualization for better results");
+      suggestions.push("Consider using a colormap for visualization");
+    }
+    return suggestions;
+  }
+  /**
+   * Apply configuration overrides
+   */
+  applyConfigOverrides(config, overrides) {
+    const result = { ...config };
+    for (const [key, value] of Object.entries(overrides)) {
+      const keys = key.split(".");
+      let current = result;
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) {
+          current[keys[i]] = {};
+        }
+        current = current[keys[i]];
+      }
+      current[keys[keys.length - 1]] = value;
+    }
+    return result;
+  }
+};
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   BackendLoadError,
   ConfigValidationError,
   ImageFlowError,
+  ImageFlowIO,
   ImageFlowPipeline,
   InferenceError,
   NoopBackend,

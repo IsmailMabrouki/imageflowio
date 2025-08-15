@@ -90,9 +90,20 @@ Last updated: today
 - Implemented: TFJS integration test behind env guard (skips gracefully when dependency not available).
 - Planned: None - comprehensive test coverage achieved.
 
+### Ecosystem Integrations
+
+- Implemented: None - currently a standalone library.
+- Planned:
+  - **Phase 1**: Express middleware, Next.js plugin, Fastify plugin, Koa middleware
+  - **Phase 2**: Vite plugin, Webpack loader, Rollup plugin
+  - **Phase 3**: Nuxt module, Remix integration, SvelteKit integration
+  - **Phase 4**: GraphQL integration, REST API framework, Microservices support
+  - **Features**: TypeScript support, error handling, performance monitoring, security best practices
+
 ## Next up (shortlist)
 
-1. Consider separate `@imageflowio/cli` package when API stabilizes.
-2. Add governance files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
-3. Add tag-based publishing workflow for automated releases.
-4. Add linting (ESLint) and formatting (Prettier) for code quality.
+1. **Ecosystem Integration Priority**: Start with Express middleware (`@imageflowio/express`) for immediate adoption value
+2. Consider separate `@imageflowio/cli` package when API stabilizes.
+3. Add governance files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
+4. Add tag-based publishing workflow for automated releases.
+5. Add linting (ESLint) and formatting (Prettier) for code quality.

@@ -1,0 +1,54 @@
+{
+  "$schema": "../config.schema.json",
+  "model": {
+    "name": "disk-cache-example",
+    "path": "./assets/models/model.onnx"
+  },
+  "input": {
+    "type": "image",
+    "source": "./examples/images/sample.png"
+  },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [512, 512],
+      "keepAspectRatio": true,
+      "resizeMode": "fit"
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.5, 0.5, 0.5],
+      "std": [0.5, 0.5, 0.5]
+    },
+    "format": {
+      "dataType": "float32",
+      "channels": 3,
+      "channelOrder": "rgb"
+    }
+  },
+  "inference": {
+    "batchSize": 1
+  },
+  "postprocessing": {
+    "denormalize": {
+      "apply": true,
+      "scale": 255,
+      "dtype": "uint8"
+    },
+    "resizeTo": "input"
+  },
+  "output": {
+    "save": {
+      "apply": true,
+      "path": "./examples/outputs",
+      "format": "png",
+      "filename": "disk_cache_output.png"
+    }
+  },
+  "execution": {
+    "backend": "noop",
+    "useCaching": "disk",
+    "cacheDir": "./examples/cache",
+    "warmupRuns": 2
+  }
+}

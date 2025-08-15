@@ -77,9 +77,85 @@ A concise, actionable plan to evolve ImageFlowIO following library best practice
 - [ ] Linting (ESLint) + formatting (Prettier)
 - [ ] Source maps in published bundle
 
-## Snippets (for later steps)
+## 10) Ecosystem Integrations
 
-- package.json (dual build skeleton)
+### Phase 1: Core Framework Integrations
+
+- [ ] Express middleware (`@imageflowio/express`)
+  - File upload handling with multer integration
+  - Automatic model loading and caching
+  - Error handling and response formatting
+  - TypeScript support and type definitions
+- [ ] Next.js plugin (`@imageflowio/next`)
+  - API route helpers for image processing
+  - Image optimization integration
+  - Development mode with hot reload
+  - Production optimizations
+- [ ] Fastify plugin (`@imageflowio/fastify`)
+  - Plugin architecture integration
+  - Schema validation with Fastify schemas
+  - Streaming support for large images
+- [ ] Koa middleware (`@imageflowio/koa`)
+  - Middleware pattern integration
+  - Context extension for imageflowio
+  - Async/await support
+
+### Phase 2: Build Tool Integrations
+
+- [ ] Vite plugin (`@imageflowio/vite`)
+  - Asset optimization during build
+  - Development server integration
+  - HMR support for model changes
+  - Bundle optimization
+- [ ] Webpack loader (`@imageflowio/webpack`)
+  - Image processing during build
+  - Model bundling and optimization
+  - Development and production modes
+- [ ] Rollup plugin (`@imageflowio/rollup`)
+  - Tree-shaking support
+  - Bundle analysis integration
+  - Plugin ecosystem compatibility
+
+### Phase 3: Framework-Specific Packages
+
+- [ ] Nuxt module (`@imageflowio/nuxt`)
+  - Server-side and client-side support
+  - Auto-imports for imageflowio utilities
+  - Module configuration
+- [ ] Remix integration (`@imageflowio/remix`)
+  - Loader and action helpers
+  - Resource route integration
+  - Error boundary support
+- [ ] SvelteKit integration (`@imageflowio/sveltekit`)
+  - Server-side processing in load functions
+  - Client-side utilities
+  - Svelte component helpers
+
+### Phase 4: Advanced Integrations
+
+- [ ] GraphQL integration (`@imageflowio/graphql`)
+  - Custom scalars for image types
+  - Resolver helpers for image processing
+  - Subscription support for long-running tasks
+- [ ] REST API framework (`@imageflowio/rest`)
+  - OpenAPI/Swagger integration
+  - Standardized response formats
+  - Rate limiting and caching
+- [ ] Microservices support (`@imageflowio/microservice`)
+  - Message queue integration (Redis, RabbitMQ)
+  - Distributed processing
+  - Service discovery integration
+
+### Integration Features
+
+- [ ] TypeScript support for all integrations
+- [ ] Comprehensive error handling and logging
+- [ ] Performance monitoring and metrics
+- [ ] Security best practices (input validation, rate limiting)
+- [ ] Documentation and examples for each integration
+- [ ] Testing suites for integration packages
+
+## Snippets (for later steps)
 
 ```jsonc
 {

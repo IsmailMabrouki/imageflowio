@@ -17,7 +17,7 @@ Status: preview runner — validates config and runs an image-to-image pipeline 
 
 ## Usage
 
-```
+````
 imageflowio --config <path/to/config.json> [--validate-only] [--verbose]
 
 Options:
@@ -61,9 +61,93 @@ Warmup runs:
 Performance:
 - `--threads auto` now sets concurrency to number of CPU cores; explicit numbers are also supported
 
-Batch mode:
-- If `input.source` points to a directory, the CLI processes all images in that directory (extensions: png|jpg|jpeg|webp|tif|tiff) and reports a summary.
- - A machine-readable `summary.json` is written to the output directory (when `output.save.path` is set) containing `processed`, `saved`, `durationMs`, and per-file items.
+## Batch Processing
+
+ImageFlowIO supports processing multiple images in parallel when the input source points to a directory.
+
+### How it works
+
+- **Directory Input**: Set `input.source` to a directory path (e.g., `"./images/"`)
+- **Automatic Detection**: CLI automatically detects directory inputs and switches to batch mode
+- **File Filtering**: Processes all supported image files (PNG, JPG, JPEG, WebP, TIFF)
+- **Parallel Processing**: Uses `--concurrency` flag to control parallel workers
+- **Progress Reporting**: Use `--progress` flag for real-time progress updates
+
+### Batch Processing Options
+
+- `--concurrency <n>` - Number of parallel workers (default: 1)
+- `--progress` - Show progress updates every 10 files
+
+### Batch Summary
+
+After processing, a `summary.json` file is automatically generated containing:
+
+```json
+{
+  "ok": true,
+  "processed": 150,
+  "saved": 148,
+  "durationMs": 45000,
+  "items": [
+    {
+      "input": "./images/photo1.jpg",
+      "output": "./outputs/photo1_processed.png"
+    },
+    {
+      "input": "./images/photo2.jpg",
+      "output": null
+    }
+  ]
+}
+````
+
+**Fields:**
+
+- `ok` - Overall success status
+- `processed` - Total number of files processed
+- `saved` - Number of files successfully saved
+- `durationMs` - Total processing time in milliseconds
+- `items` - Array of input/output file pairs
+
+### Batch Processing Examples
+
+**Basic batch processing:**
+
+```bash
+imageflowio --config batch-config.json --input ./images/ --output ./results/
+```
+
+**Parallel processing with progress:**
+
+```bash
+imageflowio --config batch-config.json --input ./images/ --output ./results/ --concurrency 4 --progress
+```
+
+**Using directory in config:**
+
+```json
+{
+  "input": {
+    "type": "image",
+    "source": "./images/"
+  },
+  "output": {
+    "save": {
+      "apply": true,
+      "path": "./results/",
+      "filename": "{model}_{timestamp}_{index}.png"
+    }
+  }
+}
+```
+
+### Performance Tips
+
+- **Concurrency**: Set `--concurrency` to number of CPU cores for optimal performance
+- **Memory**: Monitor memory usage with large batches
+- **Caching**: Enable disk caching for repeated runs on same images
+- **Progress**: Use `--progress` for long-running batches to monitor status
+
 ```
 
 ## Examples
@@ -71,8 +155,10 @@ Batch mode:
 Validate a config file:
 
 ```
+
 imageflowio -c config.json --validate-only
-```
+
+````
 
 Validate with schema reference in your config:
 
@@ -81,7 +167,7 @@ Validate with schema reference in your config:
   "$schema": "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
   "model": { "path": "./assets/models/unet.onnx" }
 }
-```
+````
 
 Then run (uses model path under `assets/models/`):
 
