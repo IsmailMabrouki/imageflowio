@@ -1,0 +1,55 @@
+{
+  "$schema": "../config.schema.json",
+  "model": {
+    "name": "resnet50",
+    "path": "./assets/models/resnet50.onnx"
+  },
+  "input": {
+    "type": "image",
+    "source": "./examples/images/sample.png"
+  },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [224, 224],
+      "keepAspectRatio": true,
+      "resizeMode": "fit"
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.485, 0.456, 0.406],
+      "std": [0.229, 0.224, 0.225]
+    },
+    "format": {
+      "dataType": "float32",
+      "channels": 3,
+      "channelOrder": "rgb"
+    }
+  },
+  "inference": {
+    "batchSize": 1
+  },
+  "postprocessing": {
+    "activation": {
+      "apply": true,
+      "type": "sigmoid"
+    },
+    "clamp": {
+      "apply": true,
+      "min": 0,
+      "max": 1
+    }
+  },
+  "output": {
+    "saveRaw": {
+      "apply": true,
+      "format": "npy",
+      "dtype": "float32",
+      "path": "./examples/outputs/raw"
+    },
+    "writeMeta": {
+      "apply": true,
+      "jsonPath": "./examples/outputs/predictions.json"
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "../config.schema.json",
+  "model": {
+    "name": "yolo",
+    "path": "./assets/models/yolo.onnx"
+  },
+  "input": {
+    "type": "image",
+    "source": "./examples/images/sample.png"
+  },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [640, 640],
+      "keepAspectRatio": true,
+      "resizeMode": "fit"
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.0, 0.0, 0.0],
+      "std": [255.0, 255.0, 255.0]
+    },
+    "format": {
+      "dataType": "float32",
+      "channels": 3,
+      "channelOrder": "rgb"
+    }
+  },
+  "inference": {
+    "batchSize": 1
+  },
+  "postprocessing": {
+    "activation": {
+      "apply": false
+    },
+    "clamp": {
+      "apply": false
+    }
+  },
+  "output": {
+    "saveRaw": {
+      "apply": true,
+      "format": "npz",
+      "path": "./examples/outputs/raw"
+    },
+    "writeMeta": {
+      "apply": true,
+      "jsonPath": "./examples/outputs/detections.json"
+    }
+  }
+}

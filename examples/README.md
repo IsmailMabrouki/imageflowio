@@ -2,7 +2,9 @@
 
 This folder contains example `config.json` files to get started quickly. Add a small PNG or JPEG at `examples/images/sample.png` to run them.
 
-## basic-noop.json
+## Model Type Examples
+
+### basic-noop.json
 
 - Runs the preview pipeline without a real model (noop backend). Useful to verify preprocessing/postprocessing/output behavior.
 
@@ -10,6 +12,30 @@ Run:
 
 ```
 imageflowio --config examples/basic-noop.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
+### classification.json
+
+- Example for classification models (ResNet, EfficientNet, etc.)
+- Uses `saveRaw` to output prediction tensors (NPY format)
+- Uses `writeMeta` to save metadata and predictions
+
+Run:
+
+```
+imageflowio --config examples/classification.json --backend onnx --input examples/images/sample.png --output examples/outputs
+```
+
+### detection.json
+
+- Example for object detection models (YOLO, SSD, etc.)
+- Uses `saveRaw` to output detection tensors (NPZ format)
+- Uses `writeMeta` to save detection metadata
+
+Run:
+
+```
+imageflowio --config examples/detection.json --backend onnx --input examples/images/sample.png --output examples/outputs
 ```
 
 ## onnx-unet.json

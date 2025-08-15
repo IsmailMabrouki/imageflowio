@@ -2,7 +2,7 @@
 
 ## What is ImageFlowIO?
 
-ImageFlowIO is a **config-driven image-to-image inference pipeline library** for Node.js that allows developers to run machine learning models on images without writing procedural code. It provides a declarative approach to image processing workflows through JSON configuration files.
+ImageFlowIO is a **config-driven ML inference pipeline library** for Node.js that allows developers to run machine learning models on images without writing procedural code. It provides a declarative approach to ML inference workflows through JSON configuration files, supporting image-to-image, classification, detection, and segmentation models.
 
 ### Core Concept
 

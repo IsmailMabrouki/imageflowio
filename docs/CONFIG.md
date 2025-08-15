@@ -230,25 +230,48 @@ Notes:
 
 ### output
 
-- **save**:
-  - **apply**: boolean — Enable saving the output image.
-  - **path**: string — Directory to write files to.
-  - **format**: "png" | "jpeg" | "webp" | "tiff" — File format.
-  - **bitDepth**: 1 | 2 | 4 | 8 | 16 — Bit depth for output where supported (PNG: 8/16, TIFF: 1/2/4/8; 16 for PNG only in current pipeline).
-  - **colorSpace**: "srgb" | "linear" — Output color space metadata.
-  - **linearToSRGB**: boolean — Convert linear output to sRGB (gamma 2.4, sRGB companding) before save.
-  - **splitChannels**: boolean — Save each channel to a separate file in addition to the combined image.
-  - **channelNames**: string[] — Names to use when splitting channels (defaults to `C0`, `C1`, ...).
-  - **filename**: string — Pattern supporting tokens like `{model}`, `{timestamp}`, `{index}`.
-  - **quality**: number — Quality for lossy formats.
-- **writeMeta**:
-  - **apply**: boolean — Persist run metadata (timings, config snapshot).
-  - **jsonPath**: string — Destination path for metadata JSON.
-- **saveRaw**:
-  - **apply**: boolean — Persist raw tensor output.
-  - **format**: "npy" | "npz" | "bin" — Raw tensor file format.
-  - **dtype**: "uint8" | "float32" — Data type when writing NPY (BIN is always raw bytes of the saved image).
-  - **path**: string — Directory to store raw outputs.
+The output section controls how results are saved. Different model types use different output strategies:
+
+**For Image-to-Image Models (segmentation, style transfer):**
+
+- **save**: Save processed images (PNG, JPEG, WebP, TIFF)
+
+**For Classification/Detection Models:**
+
+- **saveRaw**: Save raw prediction tensors (NPY, NPZ, BIN)
+- **writeMeta**: Save metadata and predictions (JSON)
+
+**For All Models:**
+
+- **writeMeta**: Save run metadata (timings, config snapshot)
+
+#### save
+
+- **apply**: boolean — Enable saving the output image.
+- **path**: string — Directory to write files to.
+- **format**: "png" | "jpeg" | "webp" | "tiff" — File format.
+- **bitDepth**: 1 | 2 | 4 | 8 | 16 — Bit depth for output where supported (PNG: 8/16, TIFF: 1/2/4/8; 16 for PNG only in current pipeline).
+- **colorSpace**: "srgb" | "linear" — Output color space metadata.
+- **linearToSRGB**: boolean — Convert linear output to sRGB (gamma 2.4, sRGB companding) before save.
+- **splitChannels**: boolean — Save each channel to a separate file in addition to the combined image.
+- **channelNames**: string[] — Names to use when splitting channels (defaults to `C0`, `C1`, ...).
+- **filename**: string — Pattern supporting tokens like `{model}`, `{timestamp}`, `{index}`.
+- **quality**: number — Quality for lossy formats.
+
+#### saveRaw
+
+- **apply**: boolean — Persist raw tensor output (useful for classification/detection models).
+- **format**: "npy" | "npz" | "bin" — Raw tensor file format.
+  - **npy**: NumPy array format (single tensor)
+  - **npz**: Compressed NumPy format (multiple tensors)
+  - **bin**: Raw binary bytes
+- **dtype**: "uint8" | "float32" — Data type when writing NPY (BIN is always raw bytes).
+- **path**: string — Directory to store raw outputs.
+
+#### writeMeta
+
+- **apply**: boolean — Persist run metadata (timings, config snapshot, predictions).
+- **jsonPath**: string — Destination path for metadata JSON.
 
 ### custom
 

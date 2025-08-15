@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/IsmailMabrouki/imageflowio/actions/workflows/ci.yml/badge.svg)](https://github.com/IsmailMabrouki/imageflowio/actions/workflows/ci.yml)
 
-Config-driven image-to-image inference pipeline.
+Config-driven ML inference pipeline for images.
 
-Define your entire pipeline in a `config.json` — model loading, runtime settings, preprocessing, tiling, postprocessing, and output saving — and run. No procedural glue required.
+Define your entire pipeline in a `config.json` — model loading, runtime settings, preprocessing, tiling, postprocessing, and output saving — and run. No procedural glue required. Supports image-to-image, classification, detection, and segmentation models.
 
 ## npm
 
@@ -67,7 +67,34 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 - Errors and diagnostics: [docs/ERRORS.md](docs/ERRORS.md)
 
-### Example config
+### Use Cases
+
+ImageFlowIO supports various ML model types:
+
+- **Image-to-Image Models** (segmentation, style transfer, denoising)
+
+  - Use `output.save` for image outputs
+  - Example: UNet for segmentation, style transfer models
+
+- **Classification Models** (image classification, object detection)
+
+  - Use `output.saveRaw` for tensor outputs (NPY/NPZ/BIN)
+  - Use `output.writeMeta` for metadata and predictions
+  - Example: ResNet, EfficientNet, YOLO
+
+- **Detection Models** (object detection, keypoint detection)
+
+  - Use `output.saveRaw` + `output.writeMeta`
+  - Example: YOLO, SSD, Faster R-CNN
+
+- **Segmentation Models** (semantic, instance segmentation)
+  - Use `output.save` for mask images
+  - Use `output.paletteMap` for colored segmentation
+  - Example: DeepLab, Mask R-CNN
+
+### Example Configurations
+
+**Image-to-Image (Segmentation):**
 
 ```json
 {
@@ -102,6 +129,40 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
       "path": "./outputs",
       "format": "png",
       "filename": "{model}_{timestamp}.png"
+    }
+  }
+}
+```
+
+**Classification Model:**
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
+  "model": { "name": "resnet50", "path": "./assets/models/resnet50.onnx" },
+  "input": { "type": "image", "source": "./images/sample.png" },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [224, 224],
+      "keepAspectRatio": true
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.485, 0.456, 0.406],
+      "std": [0.229, 0.224, 0.225]
+    },
+    "format": { "dataType": "float32", "channels": 3, "channelOrder": "rgb" }
+  },
+  "output": {
+    "saveRaw": {
+      "apply": true,
+      "format": "npy",
+      "path": "./outputs/raw"
+    },
+    "writeMeta": {
+      "apply": true,
+      "jsonPath": "./outputs/predictions.json"
     }
   }
 }
