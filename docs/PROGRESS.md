@@ -15,11 +15,12 @@ Last updated: today
 - Implemented: config schema (2020-12), CLI validate/run, basic pipeline scaffold, backend interface, tests (CLI + pipeline + tiling + viz + logging + raw), CI build+test, publish workflow with provenance.
 - Partial: ONNX backend (autodetect; optional dependency required at runtime).
 - Planned: richer error classes, more examples, feature support matrix in README.
+- Planned: TF Lite backend; batch processing; caching; NPZ writer; hosted schema `$id`.
 
 ### CLI & DX
 
 - Implemented:
-  - Flags: `--version`, `--validate-only`, `--input`, `--output`, `--dry-run`, `--print-schema`, `--backend`, `--threads`.
+  - Flags: `--version`, `--validate-only`, `--input`, `--output`, `--dry-run`, `--print-schema`, `--backend`, `--threads`, `--progress`.
   - Env overrides: `IMAGEFLOWIO_BACKEND`, `IMAGEFLOWIO_THREADS`.
 - Planned:
   - Structured validation errors (dataPath/schemaPath), potential separate CLI package.
@@ -27,9 +28,10 @@ Last updated: today
 ### Schema
 
 - Implemented:
-  - Root `$schema` allowed; tuple defs via `prefixItems`; Ajv 2020 integration.
+  - Root `$schema` allowed; tuple defs via `prefixItems`; Ajv 2020 integration; hosted `$id` for online schema resolution.
+  - Enhanced JSON Schema with comprehensive descriptions, titles, examples, and default values for better IDE autocompletion.
 - Planned:
-  - Add titles/descriptions for richer IDE hints; host schema at stable `$id` URL.
+  - Host schema at stable `$id` URL (already implemented).
 
 ### Preprocessing
 
@@ -44,12 +46,13 @@ Last updated: today
 ### Inference
 
 - Implemented:
-  - Backend interface; Noop backend; ONNX backend loader (optional `onnxruntime-node`, dynamic require); model layout hint (nhwc/nchw) documented.
-  - Backend selection: auto by extension or overrides (`--backend`).
-  - Warmup runs.
-  - Tiled inference with overlap averaging.
+  - Backend interface with `BackendModelConfig` support (layout, inputName, outputName); Noop backend; ONNX backend loader (optional `onnxruntime-node`, dynamic require); TFJS backend (optional, preview).
+- Backend selection: auto by extension or `model.json` presence (ONNX/TFJS) or overrides (`--backend`).
+- Warmup runs.
+- Tiled inference with overlap averaging.
 - Planned:
   - Full ONNX execution examples/tests; TFJS/TFLite backend (optional WASM).
+  - TFJS backend (preview) implemented behind optional dep; add more examples/tests.
 
 ### Postprocessing
 
@@ -66,7 +69,7 @@ Last updated: today
 - Implemented:
   - Save PNG/JPEG/WebP/TIFF; `quality` and bit depth where supported (PNG 8/16, TIFF 1/2/4/8).
   - Metadata JSON with timings and sizes; per-run logs when enabled.
-  - Raw tensor export: NPY (uint8/float32 normalized) and BIN.
+  - Raw tensor export: NPY (uint8/float32 normalized), BIN, NPZ.
   - Split channels with optional names.
 - Planned:
   - Split channels, color space handling (linear↔sRGB), NPZ/BIN writers.
@@ -74,17 +77,22 @@ Last updated: today
 ### Packaging/Release
 
 - Implemented:
-  - Optional peer dep: `onnxruntime-node`.
+  - Dual ESM/CJS build with `exports` map and source maps
+  - Optional peer dep: `onnxruntime-node`
+  - Engines field set (>=18)
 - Planned:
-  - Dual ESM/CJS build with `exports` map and source maps; tag-based publishing; engines field already set (>=18).
+  - Tag-based publishing and versioning policy
 
 ### Testing/CI
 
-- Implemented: CLI, colormaps, pipeline, tiling, visualization, logging, raw export, augmentations tests; Windows dev confirmed; test outputs under `testoutput/`.
-- Planned: matrix CI (Node 18/20; ubuntu/windows/macos), ONNX integration test behind env guard.
+- Implemented: CLI, colormaps, pipeline, tiling, visualization, logging, raw export, augmentations tests; Windows dev confirmed; matrix CI (Node 18/20; ubuntu/windows/macos); test outputs under `testoutput/`.
+- Implemented: ONNX integration test behind env guard (skips gracefully when dependency not available).
+- Implemented: TFJS integration test behind env guard (skips gracefully when dependency not available).
+- Planned: None - comprehensive test coverage achieved.
 
 ## Next up (shortlist)
 
-1. Dual ESM/CJS build with `exports` map and source maps.
-2. Complete ONNX backend integration path and add a guarded integration test.
-3. Stabilize type surface and error classes; host schema at stable `$id`.
+1. Consider separate `@imageflowio/cli` package when API stabilizes.
+2. Add governance files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
+3. Add tag-based publishing workflow for automated releases.
+4. Add linting (ESLint) and formatting (Prettier) for code quality.

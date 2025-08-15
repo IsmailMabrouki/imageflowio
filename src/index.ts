@@ -4,4 +4,5 @@ export * from "./backends/types";
 export * from "./errors";
 export * from "./backends/noop";
 export * from "./backends/onnx";
+export * from "./backends/tfjs";
 export * from "./utils/tensor";

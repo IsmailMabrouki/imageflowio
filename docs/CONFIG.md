@@ -16,7 +16,7 @@ This example demonstrates the full flexibility of the configuration for image-to
 
 ```json
 {
-  "$schema": "./config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
   "model": {
     "name": "unet",
     "path": "./assets/models/unet.onnx"
@@ -25,7 +25,8 @@ This example demonstrates the full flexibility of the configuration for image-to
     "backend": "auto",
     "threads": { "apply": true, "count": "auto" },
     "warmupRuns": 2,
-    "useCaching": true
+    "useCaching": "disk",
+    "cacheDir": ".imageflowio-cache"
   },
   "input": {
     "type": "image",
@@ -83,13 +84,13 @@ This example demonstrates the full flexibility of the configuration for image-to
     "save": {
       "apply": true,
       "path": "./outputs",
-      "format": "tiff",
+      "format": "png",
       "bitDepth": 16,
       "colorSpace": "linear",
       "linearToSRGB": false,
       "splitChannels": false,
       "channelNames": ["C0", "C1", "C2"],
-      "filename": "{model}_{timestamp}.tiff",
+      "filename": "{model}_{timestamp}.png",
       "quality": 95
     },
     "saveRaw": { "apply": true, "format": "npy", "path": "./outputs/raw" },
@@ -121,15 +122,18 @@ This example demonstrates the full flexibility of the configuration for image-to
 - **name**: string — Human-readable identifier for the model (e.g., `"unet"`).
 - **path**: string — Local or remote path/URL to the model artifact (e.g., ONNX/TFJS).
 - **layout**: "nhwc" | "nchw" — Optional model tensor layout hint (currently informational).
+- **inputName**: string — Optional backend-specific input tensor name (ONNX/TFJS).
+- **outputName**: string — Optional backend-specific output tensor name (ONNX/TFJS).
 
 ### execution
 
-- **backend**: "auto" | "onnx" | "noop" — Execution backend selection. `"auto"` chooses based on model path or defaults.
+- **backend**: "auto" | "onnx" | "noop" | "tfjs" — Execution backend selection. `"auto"` chooses based on model path or defaults.
 - **threads**: Object — CPU threading controls.
   - **apply**: boolean — Enable or disable multithreading.
   - **count**: number | "auto" — Thread count; `"auto"` uses available cores.
 - **warmupRuns**: number — Number of warmup inferences before timed runs (stabilizes performance).
-- **useCaching**: boolean — Cache preprocessed inputs to accelerate repeated inferences.
+- **useCaching**: boolean | "memory" | "disk" — Cache preprocessed inputs to accelerate repeated inferences. When set to "disk", preprocessed tiles are stored under `cacheDir`.
+- **cacheDir**: string — Directory to store disk cache when `useCaching: "disk"` (default: `.imageflowio-cache`).
 
 ### input
 
@@ -242,7 +246,7 @@ Notes:
   - **jsonPath**: string — Destination path for metadata JSON.
 - **saveRaw**:
   - **apply**: boolean — Persist raw tensor output.
-  - **format**: "npy" | "bin" — Raw tensor file format.
+  - **format**: "npy" | "npz" | "bin" — Raw tensor file format.
   - **dtype**: "uint8" | "float32" — Data type when writing NPY (BIN is always raw bytes of the saved image).
   - **path**: string — Directory to store raw outputs.
 

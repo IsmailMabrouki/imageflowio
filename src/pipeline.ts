@@ -3,6 +3,7 @@ import path from "path";
 import sharp from "sharp";
 import { ImageFlowConfig, Size2 } from "./types";
 import sharpModule from "sharp";
+import os from "os";
 import { writeNpy } from "./utils/npy";
 import { performance } from "node:perf_hooks";
 import { NoopBackend } from "./backends/noop";
@@ -12,37 +13,58 @@ import { mapValueToColor } from "./utils/colormaps";
 import { getPresetPalette } from "./utils/palette";
 
 export type RunOptions = {
-  backend?: "auto" | "onnx" | "noop";
+  backend?: "auto" | "onnx" | "noop" | "tfjs";
   threads?: number | "auto";
 };
 
 export class ImageFlowPipeline {
+  private static preprocCache: Map<
+    string,
+    { data: Buffer; width: number; height: number; channels: 1 | 2 | 3 | 4 }
+  > = new Map();
   constructor(private readonly config: ImageFlowConfig) {}
 
   async run(options?: RunOptions): Promise<{ outputPath?: string }> {
     const { input } = this.config;
     if (input.type !== "image")
-      throw new Error("Only image input is supported in this preview.");
+      throw new Error("Only image input is supported.");
 
     const inputAbs = path.resolve(process.cwd(), input.source);
     if (!fs.existsSync(inputAbs)) {
-      throw new Error(`Input image not found: ${input.source}`);
+      const { PipelineError } = await import("./errors.js");
+      throw new PipelineError(`Input image not found: ${input.source}`);
     }
     const tStart = performance.now();
     const logs: string[] = [];
     const logLine = (m: string) => {
       logs.push(`[${new Date().toISOString()}] ${m}`);
     };
+    const logMem = (tag: string) => {
+      try {
+        const mu = process.memoryUsage();
+        const rssMb = (mu.rss / (1024 * 1024)).toFixed(1);
+        const heapMb = (mu.heapUsed / (1024 * 1024)).toFixed(1);
+        logLine(`mem/rss=${rssMb}MB heap=${heapMb}MB tag=${tag}`);
+      } catch {}
+    };
     logLine("pipeline/start");
     // Apply threads override or config threads
     const threadsOverride = options?.threads;
-    if (threadsOverride && threadsOverride !== "auto") {
-      const countNum = Number(threadsOverride);
-      if (!Number.isNaN(countNum) && countNum > 0)
-        sharpModule.concurrency(countNum);
+    if (threadsOverride) {
+      if (threadsOverride === "auto") {
+        const cores = Math.max(1, os.cpus()?.length || 1);
+        sharpModule.concurrency(cores);
+      } else {
+        const countNum = Number(threadsOverride);
+        if (!Number.isNaN(countNum) && countNum > 0)
+          sharpModule.concurrency(countNum);
+      }
     } else if (this.config.execution?.threads?.apply) {
       const count = this.config.execution.threads.count;
-      if (count && count !== "auto") {
+      if (count === "auto") {
+        const cores = Math.max(1, os.cpus()?.length || 1);
+        sharpModule.concurrency(cores);
+      } else if (count) {
         const num = Number(count);
         if (!Number.isNaN(num) && num > 0) sharpModule.concurrency(num);
       }
@@ -51,68 +73,166 @@ export class ImageFlowPipeline {
     const originalMeta = await image.metadata();
     const tAfterLoad = performance.now();
     logLine(`load/done ms=${(tAfterLoad - tStart).toFixed(2)}`);
+    logMem("load");
 
+    // Preprocessing with optional cache
     let work = image.clone();
-
-    // Preprocessing: resize
-    const pp = this.config.preprocessing;
-    if (pp?.resize?.apply && pp.resize.imageSize) {
-      const [w, h] = pp.resize.imageSize;
-      if (pp.resize.keepAspectRatio) {
-        const fit = pp.resize.resizeMode === "fill" ? "fill" : "inside"; // fit/inside mapping
-        work = work.resize({
-          width: w,
-          height: h,
-          fit: fit as any,
-          withoutEnlargement: false,
+    const useCaching = !!this.config.execution?.useCaching;
+    const cacheMode = (
+      this.config.execution?.useCaching === true
+        ? "memory"
+        : this.config.execution?.useCaching === false
+        ? undefined
+        : (this.config.execution?.useCaching as any)
+    ) as undefined | "memory" | "disk";
+    const cacheDir = this.config.execution?.cacheDir
+      ? path.resolve(process.cwd(), this.config.execution.cacheDir)
+      : path.resolve(process.cwd(), ".imageflowio-cache");
+    const preprocessSignature = JSON.stringify(this.config.preprocessing ?? {});
+    const inputStat = fs.statSync(inputAbs);
+    const cacheKey = `${inputAbs}|${inputStat.mtimeMs}|${preprocessSignature}`;
+    let loadedFromCache = false;
+    if (useCaching && cacheMode) {
+      const cached = ImageFlowPipeline.preprocCache.get(cacheKey);
+      if (cached) {
+        work = sharp(cached.data, {
+          raw: {
+            width: cached.width,
+            height: cached.height,
+            channels: cached.channels as 1 | 2 | 3 | 4,
+          },
         });
-      } else {
-        work = work.resize({ width: w, height: h, fit: "fill" });
+        loadedFromCache = true;
+        logLine("cache/memory hit");
+      } else if (cacheMode === "disk") {
+        try {
+          const keySafe = Buffer.from(cacheKey).toString("base64url");
+          const metaPath = path.join(cacheDir, `${keySafe}.json`);
+          const binPath = path.join(cacheDir, `${keySafe}.bin`);
+          if (fs.existsSync(metaPath) && fs.existsSync(binPath)) {
+            const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+            const buf = fs.readFileSync(binPath);
+            work = sharp(buf, {
+              raw: {
+                width: meta.width,
+                height: meta.height,
+                channels: meta.channels,
+              },
+            });
+            loadedFromCache = true;
+            logLine("cache/disk hit");
+          }
+        } catch {}
       }
     }
 
-    if (pp?.centerCrop?.apply && pp.centerCrop.size) {
-      const [cw, ch] = pp.centerCrop.size;
-      work = work.resize({
-        width: cw,
-        height: ch,
-        fit: "cover",
-        position: sharp.strategy.attention,
-      });
-    }
-
-    if (pp?.grayscale?.apply) {
-      work = work.grayscale();
-    }
-
-    // Preprocessing: augmentations (preview)
-    if (pp?.augmentations?.apply) {
-      const methods: string[] = ((pp.augmentations as any).methods ||
-        []) as string[];
-      const params: any = (pp.augmentations as any).params || {};
-      for (const method of methods) {
-        if (method === "flip") {
-          const axis =
-            params?.flip?.axis || params?.flip?.direction || "horizontal";
-          if (axis === "vertical") {
-            work = work.flip();
-          } else {
-            work = work.flop();
-          }
-        } else if (method === "rotate") {
-          const angle = Number(params?.rotate?.angle ?? 0);
-          const allowed = [0, 90, 180, 270];
-          const rot = allowed.includes(angle) ? angle : 0;
-          if (rot !== 0) work = work.rotate(rot as 0 | 90 | 180 | 270);
-        } else if (method === "colorJitter") {
-          const brightness = Number(params?.colorJitter?.brightness ?? 1);
-          const saturation = Number(params?.colorJitter?.saturation ?? 1);
-          const hue = Number(params?.colorJitter?.hue ?? 0);
-          work = work.modulate({
-            brightness: isFinite(brightness) && brightness > 0 ? brightness : 1,
-            saturation: isFinite(saturation) && saturation > 0 ? saturation : 1,
-            hue: isFinite(hue) ? hue : 0,
+    // Preprocessing: resize, crop, grayscale, augmentations
+    const pp = this.config.preprocessing;
+    if (!loadedFromCache) {
+      if (pp?.resize?.apply && pp.resize.imageSize) {
+        const [w, h] = pp.resize.imageSize;
+        if (pp.resize.keepAspectRatio) {
+          const fit = pp.resize.resizeMode === "fill" ? "fill" : "inside"; // fit/inside mapping
+          work = work.resize({
+            width: w,
+            height: h,
+            fit: fit as any,
+            withoutEnlargement: false,
           });
+        } else {
+          work = work.resize({ width: w, height: h, fit: "fill" });
+        }
+      }
+
+      if (pp?.centerCrop?.apply && pp.centerCrop.size) {
+        const [cw, ch] = pp.centerCrop.size;
+        work = work.resize({
+          width: cw,
+          height: ch,
+          fit: "cover",
+          position: sharp.strategy.attention,
+        });
+      }
+
+      if (pp?.grayscale?.apply) {
+        work = work.grayscale();
+      }
+
+      // Preprocessing: augmentations
+      if (pp?.augmentations?.apply) {
+        const methods: string[] = ((pp.augmentations as any).methods ||
+          []) as string[];
+        const params: any = (pp.augmentations as any).params || {};
+        for (const method of methods) {
+          if (method === "flip") {
+            const axis =
+              params?.flip?.axis || params?.flip?.direction || "horizontal";
+            if (axis === "vertical") {
+              work = work.flip();
+            } else {
+              work = work.flop();
+            }
+          } else if (method === "rotate") {
+            const angle = Number(params?.rotate?.angle ?? 0);
+            const allowed = [0, 90, 180, 270];
+            const rot = allowed.includes(angle) ? angle : 0;
+            if (rot !== 0) work = work.rotate(rot as 0 | 90 | 180 | 270);
+          } else if (method === "colorJitter") {
+            const brightness = Number(params?.colorJitter?.brightness ?? 1);
+            const saturation = Number(params?.colorJitter?.saturation ?? 1);
+            const hue = Number(params?.colorJitter?.hue ?? 0);
+            work = work.modulate({
+              brightness:
+                isFinite(brightness) && brightness > 0 ? brightness : 1,
+              saturation:
+                isFinite(saturation) && saturation > 0 ? saturation : 1,
+              hue: isFinite(hue) ? hue : 0,
+            });
+          }
+        }
+      }
+      if (useCaching && cacheMode) {
+        const { data, info } = await work
+          .clone()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        const ch = Math.max(1, Math.min(4, info.channels ?? 3)) as
+          | 1
+          | 2
+          | 3
+          | 4;
+        ImageFlowPipeline.preprocCache.set(cacheKey, {
+          data,
+          width: info.width ?? 0,
+          height: info.height ?? 0,
+          channels: ch,
+        });
+        if (cacheMode === "disk") {
+          try {
+            if (!fs.existsSync(cacheDir))
+              fs.mkdirSync(cacheDir, { recursive: true });
+            const keySafe = Buffer.from(cacheKey).toString("base64url");
+            const metaPath = path.join(cacheDir, `${keySafe}.json`);
+            const binPath = path.join(cacheDir, `${keySafe}.bin`);
+            fs.writeFileSync(
+              metaPath,
+              JSON.stringify(
+                {
+                  width: info.width ?? 0,
+                  height: info.height ?? 0,
+                  channels: ch,
+                },
+                null,
+                2
+              ),
+              "utf-8"
+            );
+            fs.writeFileSync(
+              binPath,
+              Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+            );
+            logLine("cache/disk write");
+          } catch {}
         }
       }
     }
@@ -252,6 +372,7 @@ export class ImageFlowPipeline {
     }
     const tAfterPre = performance.now();
     logLine(`preprocess/done ms=${(tAfterPre - tAfterLoad).toFixed(2)}`);
+    logMem("preprocess");
 
     // Placeholder for inference: image-to-image identity transform (no-op)
     let out = work;
@@ -259,17 +380,35 @@ export class ImageFlowPipeline {
     let tAfterInfer = performance.now();
     if (inputTensor) {
       // Select backend: options override -> config.execution.backend -> extension heuristic
-      let backendChoice: "auto" | "onnx" | "noop" =
+      let backendChoice: "auto" | "onnx" | "noop" | "tfjs" =
         options?.backend ?? ((this.config.execution?.backend as any) || "auto");
       if (backendChoice === "auto") {
-        backendChoice = this.config.model.path.toLowerCase().endsWith(".onnx")
-          ? "onnx"
-          : "noop";
+        const modelPath = this.config.model.path;
+        const lower = modelPath.toLowerCase();
+        const absModel = path.isAbsolute(modelPath)
+          ? modelPath
+          : path.resolve(process.cwd(), modelPath);
+        const looksOnnx = lower.endsWith(".onnx");
+        const looksTfjs =
+          lower.endsWith("model.json") ||
+          (fs.existsSync(absModel) &&
+            fs.statSync(absModel).isDirectory() &&
+            fs.existsSync(path.join(absModel, "model.json")));
+        backendChoice = looksOnnx ? "onnx" : looksTfjs ? "tfjs" : "noop";
       }
-      let backend: InferenceBackend =
-        backendChoice === "onnx" ? new OnnxBackend() : new NoopBackend();
+      let backend: InferenceBackend;
+      if (backendChoice === "onnx") backend = new OnnxBackend();
+      else if (backendChoice === "tfjs")
+        backend = new (await import("./backends/tfjs.js")).TfjsBackend();
+      else backend = new NoopBackend();
       try {
-        await backend.loadModel(this.config.model.path);
+        const modelConfig = {
+          path: this.config.model.path,
+          layout: this.config.model.layout,
+          inputName: this.config.model.inputName,
+          outputName: this.config.model.outputName,
+        };
+        await backend.loadModel(modelConfig);
       } catch (e: any) {
         throw new (await import("./errors.js")).BackendLoadError(
           e?.message || String(e)
@@ -296,6 +435,13 @@ export class ImageFlowPipeline {
       const scaleFactor = this.config.postprocessing?.denormalize?.scale ?? 255;
 
       if (doTiling) {
+        logLine(
+          `tiling/start tileSize=${tiling?.tileSize?.[0] ?? 256}x${
+            tiling?.tileSize?.[1] ?? 256
+          } overlap=${tiling?.overlap ?? 0} blend=${
+            tiling?.blend ?? "average"
+          } pad=${tiling?.padMode ?? "none"}`
+        );
         const { data: baseData, info: baseInfo } = await work
           .clone()
           .raw()
@@ -324,6 +470,7 @@ export class ImageFlowPipeline {
           const th = Math.min(tileH, imgH - y);
           for (let x = 0; x < imgW; x += stepX) {
             const tw = Math.min(tileW, imgW - x);
+            logLine(`tiling/tile x=${x} y=${y} w=${tw} h=${th}`);
             // Extract tile
             const tileBuf = await sharp(baseData, {
               raw: { width: imgW, height: imgH, channels: ch },
@@ -430,7 +577,14 @@ export class ImageFlowPipeline {
               width: inferW,
               height: inferH,
               channels: ch,
-            });
+              // optional backend-specific hints
+              ...(this.config.model.inputName
+                ? { inputName: this.config.model.inputName }
+                : {}),
+              ...(this.config.model.outputName
+                ? { outputName: this.config.model.outputName }
+                : {}),
+            } as any);
             // accumulate
             if (blendMode === "max" && maxVals) {
               for (let ty = 0; ty < th; ty++) {
@@ -498,15 +652,28 @@ export class ImageFlowPipeline {
         out = sharp(outBuf, {
           raw: { width: imgW, height: imgH, channels: ch },
         });
+        logLine("tiling/done");
       } else {
         // For now, we assume backends consume NHWC; if model.layout === 'nchw', a conversion could be inserted here.
-        const result = await backend.infer({
-          data: inputTensor.data,
-          width: inputTensor.width,
-          height: inputTensor.height,
-          channels: inputTensor.channels,
-          layout: this.config.model.layout || "nhwc",
-        });
+        let result;
+        try {
+          result = await backend.infer({
+            data: inputTensor.data,
+            width: inputTensor.width,
+            height: inputTensor.height,
+            channels: inputTensor.channels,
+            layout: this.config.model.layout || "nhwc",
+            ...(this.config.model.inputName
+              ? { inputName: this.config.model.inputName }
+              : {}),
+            ...(this.config.model.outputName
+              ? { outputName: this.config.model.outputName }
+              : {}),
+          } as any);
+        } catch (e: any) {
+          const { InferenceError } = await import("./errors.js");
+          throw new InferenceError(e?.message || String(e));
+        }
         // Convert back to uint8 image for downstream steps (respect denormalize.scale if provided)
         const uint8 = Buffer.alloc(result.data.length);
         for (let i = 0; i < result.data.length; i++) {
@@ -529,14 +696,13 @@ export class ImageFlowPipeline {
       }
       tAfterInfer = performance.now();
       logLine(`inference/done ms=${(tAfterInfer - tAfterPre).toFixed(2)}`);
+      logMem("inference");
       if (backend.dispose) await backend.dispose();
     }
 
     // Postprocessing
     const post = this.config.postprocessing;
-    // toneMap/activation/clamp/denormalize are not implemented in this preview
-
-    // Activation / clamp / denormalize (preview implementation on 8-bit data)
+    // Activation / clamp / denormalize on 8-bit data
     if (
       post?.activation?.apply ||
       post?.clamp?.apply ||
@@ -824,6 +990,7 @@ export class ImageFlowPipeline {
     }
     const tAfterPost = performance.now();
     logLine(`postprocess/done ms=${(tAfterPost - tAfterInfer).toFixed(2)}`);
+    logMem("postprocess");
 
     // Output saving
     const output = this.config.output;
@@ -913,19 +1080,48 @@ export class ImageFlowPipeline {
           const bd = output.save.bitDepth as any as number | undefined;
           const pngOpts: any = { compressionLevel: 9 };
           if (bd === 8 || bd === 16) pngOpts.bitdepth = bd as any;
-          await out.png(pngOpts).toFile(target);
+          try {
+            await out.png(pngOpts).toFile(target);
+          } catch (e: any) {
+            const { SaveError } = await import("./errors.js");
+            throw new SaveError(e?.message || String(e));
+          }
         } else if (format === "jpeg") {
-          await out.jpeg({ quality: output.save.quality ?? 90 }).toFile(target);
+          try {
+            await out
+              .jpeg({ quality: output.save.quality ?? 90 })
+              .toFile(target);
+          } catch (e: any) {
+            const { SaveError } = await import("./errors.js");
+            throw new SaveError(e?.message || String(e));
+          }
         } else if (format === "webp") {
-          await out.webp({ quality: output.save.quality ?? 90 }).toFile(target);
+          try {
+            await out
+              .webp({ quality: output.save.quality ?? 90 })
+              .toFile(target);
+          } catch (e: any) {
+            const { SaveError } = await import("./errors.js");
+            throw new SaveError(e?.message || String(e));
+          }
         } else if (format === "tiff") {
           const bd = output.save.bitDepth as any as number | undefined;
           const tiffOpts: any = { quality: output.save.quality ?? 90 };
           if (bd === 1 || bd === 2 || bd === 4 || bd === 8)
             tiffOpts.bitdepth = bd as any;
-          await out.tiff(tiffOpts).toFile(target);
+          try {
+            await out.tiff(tiffOpts).toFile(target);
+          } catch (e: any) {
+            const { SaveError } = await import("./errors.js");
+            throw new SaveError(e?.message || String(e));
+          }
         } else {
-          await out.toFile(target);
+          try {
+            await out.toFile(target);
+          } catch (e: any) {
+            const { SaveError } = await import("./errors.js");
+            throw new SaveError(e?.message || String(e));
+          }
         }
         logLine(`save/done path=${target}`);
       } else {
@@ -983,7 +1179,9 @@ export class ImageFlowPipeline {
             ])
             .png();
           const vizName = path.parse(target).name + "_viz.png";
-          await canvas.toFile(path.join(vizDir, vizName));
+          const vpath = path.join(vizDir, vizName);
+          await canvas.toFile(vpath);
+          logLine(`viz/done type=${vizType} path=${vpath}`);
         } else if (vizType === "difference") {
           const outMeta = await out.metadata();
           const w = outMeta.width ?? 0;
@@ -1014,9 +1212,11 @@ export class ImageFlowPipeline {
             diff[j + 2] = val;
           }
           const vizName = path.parse(target).name + "_diff.png";
+          const vpath = path.join(vizDir, vizName);
           await sharp(diff, { raw: { width: w, height: h, channels: 3 } })
             .png()
-            .toFile(path.join(vizDir, vizName));
+            .toFile(vpath);
+          logLine(`viz/done type=${vizType} path=${vpath}`);
         } else if (vizType === "overlay") {
           const outMeta = await out.metadata();
           const w = outMeta.width ?? 0;
@@ -1034,7 +1234,9 @@ export class ImageFlowPipeline {
             .composite([{ input: overlay, blend: "over" }])
             .png();
           const vizName = path.parse(target).name + "_overlay.png";
-          await viz.toFile(path.join(vizDir, vizName));
+          const vpath = path.join(vizDir, vizName);
+          await viz.toFile(vpath);
+          logLine(`viz/done type=${vizType} path=${vpath}`);
         } else if (vizType === "heatmap") {
           const outMeta = await out.metadata();
           const w = outMeta.width ?? 0;
@@ -1066,9 +1268,11 @@ export class ImageFlowPipeline {
             heat[j + 2] = b;
           }
           const vizName = path.parse(target).name + "_heatmap.png";
+          const vpath = path.join(vizDir, vizName);
           await sharp(heat, { raw: { width: w, height: h, channels: 3 } })
             .png()
-            .toFile(path.join(vizDir, vizName));
+            .toFile(vpath);
+          logLine(`viz/done type=${vizType} path=${vpath}`);
         }
       }
 
@@ -1115,6 +1319,14 @@ export class ImageFlowPipeline {
           logs.push(
             `[${new Date().toISOString()}] total ms=${totalMs.toFixed(2)}`
           );
+          try {
+            const mu = process.memoryUsage();
+            const rssMb = (mu.rss / (1024 * 1024)).toFixed(1);
+            const heapMb = (mu.heapUsed / (1024 * 1024)).toFixed(1);
+            logs.push(
+              `[${new Date().toISOString()}] mem/rss=${rssMb}MB heap=${heapMb}MB tag=end`
+            );
+          } catch {}
           const level = (this.config.logging.level || "info") as
             | "debug"
             | "info"
@@ -1163,6 +1375,29 @@ export class ImageFlowPipeline {
             rawPath,
             Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength)
           );
+        } else if (format === "npz") {
+          const { writeNpz } = await import("./utils/npy.js");
+          if (dtype === "float32") {
+            const float = new Float32Array(arr.length);
+            for (let i = 0; i < arr.length; i++) float[i] = arr[i] / 255;
+            writeNpz(rawPath.replace(/\.npy$/i, ".npz"), [
+              {
+                name: "output",
+                data: float as unknown as Float32Array,
+                shape: [info.height ?? 0, info.width ?? 0, info.channels ?? 3],
+                dtype: "float32",
+              },
+            ]);
+          } else {
+            writeNpz(rawPath.replace(/\.npy$/i, ".npz"), [
+              {
+                name: "output",
+                data: arr,
+                shape: [info.height ?? 0, info.width ?? 0, info.channels ?? 3],
+                dtype: "uint8",
+              },
+            ]);
+          }
         } else {
           if (dtype === "float32") {
             const float = new Float32Array(arr.length);

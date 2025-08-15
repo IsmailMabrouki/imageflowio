@@ -6,16 +6,13 @@
     "format": { "dataType": "float32", "channels": 3, "channelOrder": "rgb" },
     "normalize": { "apply": false }
   },
-  "inference": {
-    "tiling": {
-      "apply": true,
-      "tileSize": [128, 128],
-      "overlap": 16,
-      "padMode": "reflect",
-      "blend": "average"
-    }
-  },
+  "postprocessing": { "denormalize": { "apply": true, "scale": 255 } },
   "output": {
-    "save": { "apply": true, "path": "./examples/outputs", "format": "png" }
+    "save": { "apply": true, "path": "./examples/outputs", "format": "png" },
+    "saveRaw": {
+      "apply": true,
+      "format": "npz",
+      "path": "./examples/outputs/raw"
+    }
   }
 }

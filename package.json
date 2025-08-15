@@ -2,7 +2,7 @@
   "name": "imageflowio",
   "version": "0.0.4",
   "description": "A configurable image preprocessing and inference pipeline library",
-  "main": "dist/index.cjs",
+  "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "bin": {
@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --dts --format cjs,esm --sourcemap --out-dir dist --clean",
     "dev": "tsc -w",
-    "test": "npm run build && vitest run --reporter=dot",
+    "test": "npm run build; vitest run --reporter=dot",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

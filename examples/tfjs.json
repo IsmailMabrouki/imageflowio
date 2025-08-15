@@ -1,20 +1,12 @@
 {
   "$schema": "../config.schema.json",
-  "model": { "path": "noop.onnx" },
+  "model": { "path": "./examples/tfjs-model" },
   "input": { "type": "image", "source": "./examples/images/sample.png" },
   "preprocessing": {
     "format": { "dataType": "float32", "channels": 3, "channelOrder": "rgb" },
     "normalize": { "apply": false }
   },
-  "inference": {
-    "tiling": {
-      "apply": true,
-      "tileSize": [128, 128],
-      "overlap": 16,
-      "padMode": "reflect",
-      "blend": "average"
-    }
-  },
+  "postprocessing": { "denormalize": { "apply": true, "scale": 255 } },
   "output": {
     "save": { "apply": true, "path": "./examples/outputs", "format": "png" }
   }

@@ -4,13 +4,17 @@ export interface ModelConfig {
   name?: string;
   path: string;
   layout?: "nhwc" | "nchw";
+  inputName?: string;
+  outputName?: string;
 }
 
 export interface ExecutionConfig {
-  backend?: "auto" | "cpu" | "gpu" | "onnx" | "noop";
+  // Planned: extend backend to include "cpu" | "gpu" when additional backends are added
+  backend?: "auto" | "onnx" | "noop" | "tfjs";
   threads?: { apply?: boolean; count?: number | "auto" };
   warmupRuns?: number;
-  useCaching?: boolean;
+  useCaching?: boolean | "memory" | "disk";
+  cacheDir?: string;
 }
 
 export interface InputConfig {
@@ -143,7 +147,8 @@ export interface SaveConfig {
   apply?: boolean;
   path?: string;
   format?: "png" | "jpeg" | "webp" | "tiff";
-  bitDepth?: 8 | 16 | 32;
+  // Note: 32-bit may be considered later if pipeline adds support for it
+  bitDepth?: 1 | 2 | 4 | 8 | 16;
   colorSpace?: "srgb" | "linear";
   linearToSRGB?: boolean;
   splitChannels?: boolean;
@@ -154,7 +159,9 @@ export interface SaveConfig {
 
 export interface SaveRawConfig {
   apply?: boolean;
+  // Now supports NPZ container in addition to NPY/BIN
   format?: "npy" | "npz" | "bin";
+  dtype?: "uint8" | "float32";
   path?: string;
 }
 

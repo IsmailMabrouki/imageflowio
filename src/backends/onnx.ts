@@ -1,13 +1,20 @@
-import { InferenceBackend, InferenceInput, InferenceOutput } from "./types";
+import {
+  InferenceBackend,
+  InferenceInput,
+  InferenceOutput,
+  BackendModelConfig,
+} from "./types";
 import { nhwcToNchw, nchwToNhwc } from "../utils/tensor";
 
 export class OnnxBackend implements InferenceBackend {
   name = "onnxruntime-node";
   private session: any | null = null;
   private ort: any | null = null;
+  private modelConfig: BackendModelConfig | null = null;
   private static sessionCache: Map<string, any> = new Map();
 
-  async loadModel(modelPath: string): Promise<void> {
+  async loadModel(config: BackendModelConfig): Promise<void> {
+    this.modelConfig = config;
     try {
       // Dynamic import to avoid hard dependency at install time
       // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -16,18 +23,23 @@ export class OnnxBackend implements InferenceBackend {
       // @ts-ignore
       this.ort = require("onnxruntime-node");
       const ort = this.ort;
-      const cached = OnnxBackend.sessionCache.get(modelPath);
+      const cached = OnnxBackend.sessionCache.get(config.path);
       if (cached) {
         this.session = cached;
         return;
       }
-      this.session = await ort.InferenceSession.create(modelPath);
-      OnnxBackend.sessionCache.set(modelPath, this.session);
+      this.session = await ort.InferenceSession.create(config.path);
+      OnnxBackend.sessionCache.set(config.path, this.session);
     } catch (err) {
+      const msg = String(err);
+      // Normalize common module-not-found messages for friendlier surfacing upstream
+      if (/Cannot find module 'onnxruntime-node'|MODULE_NOT_FOUND/i.test(msg)) {
+        throw new Error(
+          "Failed to load onnxruntime-node. Install 'onnxruntime-node' to use the ONNX backend."
+        );
+      }
       throw new Error(
-        `Failed to load onnxruntime-node. Install 'onnxruntime-node' to use the ONNX backend. Underlying error: ${String(
-          err
-        )}`
+        `Failed to load ONNX model at ${config.path}. Install 'onnxruntime-node' to use the ONNX backend. Underlying error: ${msg}`
       );
     }
   }
@@ -35,8 +47,10 @@ export class OnnxBackend implements InferenceBackend {
   async infer(input: InferenceInput): Promise<InferenceOutput> {
     if (!this.session || !this.ort)
       throw new Error("ONNX session not initialized");
+    if (!this.modelConfig) throw new Error("ONNX model configuration not set");
+
     const ort = this.ort;
-    const layout = input.layout || "nhwc";
+    const layout = input.layout || this.modelConfig.layout || "nhwc";
     const isNchw = layout === "nchw";
     const nhwcShape = [1, input.height, input.width, input.channels];
     const nchwShape = [1, input.channels, input.height, input.width];
@@ -46,12 +60,19 @@ export class OnnxBackend implements InferenceBackend {
     const tensorShape = isNchw ? nchwShape : nhwcShape;
     const tensor = new ort.Tensor("float32", tensorData, tensorShape);
 
-    const inputName = (this.session as any).inputNames?.[0] ?? "input";
+    // Use configured input name or fall back to session's first input
+    const inputName =
+      input.inputName ||
+      this.modelConfig.inputName ||
+      ((this.session as any).inputNames?.[0] ?? "input");
     const feeds: Record<string, any> = {};
     feeds[inputName] = tensor;
+
     const results = await this.session.run(feeds);
-    const firstOutputName = Object.keys(results)[0];
-    const outTensor = results[firstOutputName];
+
+    // Use configured output name or fall back to first output
+    const outputName = this.modelConfig.outputName || Object.keys(results)[0];
+    const outTensor = results[outputName];
     let data: Float32Array = outTensor.data as Float32Array;
     const dims: number[] =
       (outTensor.dims as number[]) || (isNchw ? nchwShape : nhwcShape);
@@ -80,7 +101,12 @@ export class OnnxBackend implements InferenceBackend {
       }
     }
 
-    return { data, width, height, channels };
+    return {
+      data,
+      width,
+      height,
+      channels,
+    };
   }
 
   // Sessions are cached; dispose is a no-op in this preview

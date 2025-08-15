@@ -1,17 +1,27 @@
-import { InferenceBackend, InferenceInput, InferenceOutput } from "./types";
+import {
+  InferenceBackend,
+  InferenceInput,
+  InferenceOutput,
+  BackendModelConfig,
+} from "./types";
 
 export class NoopBackend implements InferenceBackend {
   name = "noop";
-  async loadModel(_modelPath: string): Promise<void> {
-    return;
+  private modelConfig: BackendModelConfig | null = null;
+
+  async loadModel(config: BackendModelConfig): Promise<void> {
+    this.modelConfig = config;
+    // No-op backend doesn't actually load anything
   }
+
   async infer(input: InferenceInput): Promise<InferenceOutput> {
-    // Identity passthrough
+    // Identity transform: return input as output
     return {
       data: input.data,
       width: input.width,
       height: input.height,
-      channels: Math.max(1, Math.min(4, input.channels)) as 1 | 2 | 3 | 4,
+      channels: input.channels,
+      layout: input.layout,
     };
   }
 }

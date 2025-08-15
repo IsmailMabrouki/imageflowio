@@ -2,6 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { ImageFlowPipeline } from "./pipeline";
+import Ajv from "ajv";
 import { ConfigValidationError } from "./errors";
 
 function getHereDir(): string {
@@ -23,10 +24,17 @@ type CliOptions = {
   inputOverride?: string;
   outputOverride?: string;
   printSchema: boolean;
-  backend?: "auto" | "onnx" | "noop";
+  backend?: "auto" | "onnx" | "noop" | "tfjs";
   threads?: number | "auto";
   jsonErrors?: boolean;
   logFile?: string;
+  vizType?: "sideBySide" | "overlay" | "heatmap" | "difference";
+  vizAlpha?: number;
+  vizOut?: string;
+  logLevel?: "debug" | "info" | "error";
+  errorsMode?: "json" | "pretty";
+  concurrency?: number;
+  progress?: boolean;
   help: boolean;
 };
 
@@ -42,6 +50,13 @@ function parseArgs(argv: string[]): CliOptions {
     threads: undefined,
     jsonErrors: false,
     logFile: undefined,
+    vizType: undefined,
+    vizAlpha: undefined,
+    vizOut: undefined,
+    logLevel: undefined,
+    errorsMode: undefined,
+    concurrency: undefined,
+    progress: undefined,
     help: false,
   };
 
@@ -56,11 +71,11 @@ function parseArgs(argv: string[]): CliOptions {
     else if (token === "--print-schema") defaults.printSchema = true;
     else if (token.startsWith("--backend=")) {
       const val = token.split("=")[1] as any;
-      if (val === "auto" || val === "onnx" || val === "noop")
+      if (val === "auto" || val === "onnx" || val === "noop" || val === "tfjs")
         defaults.backend = val;
     } else if (token === "--backend") {
       const val = args.shift() as any;
-      if (val === "auto" || val === "onnx" || val === "noop")
+      if (val === "auto" || val === "onnx" || val === "noop" || val === "tfjs")
         defaults.backend = val;
     } else if (token.startsWith("--threads=")) {
       const val = token.split("=")[1];
@@ -70,10 +85,61 @@ function parseArgs(argv: string[]): CliOptions {
       if (val) defaults.threads = val === "auto" ? "auto" : Number(val);
     } else if (token === "--json-errors") {
       defaults.jsonErrors = true;
+      defaults.errorsMode = "json";
+    } else if (token.startsWith("--errors=")) {
+      const val = token.split("=")[1] as any;
+      if (val === "json" || val === "pretty") defaults.errorsMode = val;
+    } else if (token === "--errors") {
+      const val = args.shift() as any;
+      if (val === "json" || val === "pretty") defaults.errorsMode = val;
     } else if (token.startsWith("--log-file=")) {
       defaults.logFile = token.split("=")[1];
     } else if (token === "--log-file") {
       defaults.logFile = args.shift();
+    } else if (token.startsWith("--log-level=")) {
+      const val = token.split("=")[1] as any;
+      if (val === "debug" || val === "info" || val === "error")
+        defaults.logLevel = val;
+    } else if (token === "--log-level") {
+      const val = args.shift() as any;
+      if (val === "debug" || val === "info" || val === "error")
+        defaults.logLevel = val;
+    } else if (token.startsWith("--concurrency=")) {
+      const val = Number(token.split("=")[1]);
+      if (!Number.isNaN(val) && val > 0) defaults.concurrency = val;
+    } else if (token === "--concurrency") {
+      const val = Number(args.shift());
+      if (!Number.isNaN(val) && val > 0) defaults.concurrency = val;
+    } else if (token === "--progress") {
+      defaults.progress = true;
+    } else if (token.startsWith("--viz=")) {
+      const val = token.split("=")[1] as any;
+      if (
+        val === "sideBySide" ||
+        val === "overlay" ||
+        val === "heatmap" ||
+        val === "difference"
+      )
+        defaults.vizType = val;
+    } else if (token === "--viz") {
+      const val = args.shift() as any;
+      if (
+        val === "sideBySide" ||
+        val === "overlay" ||
+        val === "heatmap" ||
+        val === "difference"
+      )
+        defaults.vizType = val;
+    } else if (token.startsWith("--viz-alpha=")) {
+      const val = Number(token.split("=")[1]);
+      if (!Number.isNaN(val)) defaults.vizAlpha = val;
+    } else if (token === "--viz-alpha") {
+      const val = Number(args.shift());
+      if (!Number.isNaN(val)) defaults.vizAlpha = val;
+    } else if (token.startsWith("--viz-out=")) {
+      defaults.vizOut = token.split("=")[1];
+    } else if (token === "--viz-out") {
+      defaults.vizOut = args.shift() as any;
     } else if (token.startsWith("--input="))
       defaults.inputOverride = token.split("=")[1];
     else if (token === "--input") defaults.inputOverride = args.shift();
@@ -104,10 +170,17 @@ Options:
   -v, --verbose        Verbose logs
       --input <path>   Override input.source
       --output <path>  Override output.save.path
-      --backend <b>    Backend override: auto|onnx|noop
+      --backend <b>    Backend override: auto|onnx|noop|tfjs
       --threads <n>    Threads override: number|auto
       --json-errors    Print validation errors as JSON
+      --errors <m>     Error output mode: json|pretty (default: pretty)
       --log-file <p>   Write errors/logs to file
+      --log-level <l>  Override logging.level: debug|info|error
+      --concurrency <n>  Max parallel workers for directory inputs (default: 1)
+      --progress       Print progress updates for directory inputs
+      --viz <t>        Visualization: sideBySide|overlay|heatmap|difference
+      --viz-alpha <a>  Visualization overlay alpha (0..1)
+      --viz-out <dir>  Visualization output directory
       --dry-run        Validate and print plan only
       --print-schema   Print packaged schema path
   -h, --help           Show this help
@@ -131,13 +204,19 @@ async function validateConfig(
     };
   }
 
-  // Use Ajv 2020 via require to avoid d.ts resolution issues in bundlers
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const Ajv2020 = require("ajv/dist/2020")
-    .default as typeof import("ajv/dist/2020").default;
-  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  // Prefer Ajv 2020 class when available; otherwise fall back to Ajv core and add metaschema
+  let ajv: Ajv;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Ajv2020 = require("ajv/dist/2020").default as typeof Ajv;
+    ajv = new Ajv2020({ allErrors: true, strict: false }) as unknown as Ajv;
+  } catch {
+    ajv = new Ajv({ allErrors: true, strict: false });
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const meta2020 = require("ajv/dist/refs/json-schema-2020-12.json");
+    // @ts-ignore Ajv typings don't include addMetaSchema overload
     ajv.addMetaSchema(meta2020);
   } catch {}
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
@@ -200,8 +279,18 @@ async function run(): Promise<void> {
     options.verbose
   );
   if (!valid) {
-    if (options.jsonErrors) {
-      const payload = { ok: false, error: "config/invalid", errors };
+    if (options.errorsMode === "json" || options.jsonErrors) {
+      const payload = {
+        ok: false,
+        error: "config/invalid",
+        errors: errors?.map((e) => ({
+          instancePath: e.instancePath,
+          schemaPath: e.schemaPath,
+          keyword: e.keyword,
+          message: e.message,
+          params: e.params,
+        })),
+      };
       const out = JSON.stringify(payload, null, 2);
       // eslint-disable-next-line no-console
       console.error(out);
@@ -230,6 +319,23 @@ async function run(): Promise<void> {
   }
 
   const config = JSON.parse(fs.readFileSync(options.configPath, "utf-8"));
+  if ((options as any).cacheMode) {
+    config.execution = config.execution ?? {};
+    config.execution.useCaching = (options as any).cacheMode;
+  }
+  if ((options as any).cacheDir) {
+    config.execution = config.execution ?? {};
+    config.execution.cacheDir = (options as any).cacheDir;
+  }
+  if (options.logLevel) {
+    config.logging = config.logging ?? {};
+    config.logging.level = options.logLevel;
+  }
+  if (options.logFile) {
+    config.logging = config.logging ?? {};
+    config.logging.saveLogs = true;
+    config.logging.logPath = options.logFile;
+  }
   if (options.inputOverride) {
     config.input = config.input ?? {};
     config.input.source = options.inputOverride;
@@ -238,6 +344,13 @@ async function run(): Promise<void> {
     config.output = config.output ?? {};
     config.output.save = config.output.save ?? {};
     config.output.save.path = options.outputOverride;
+  }
+  if (options.vizType || options.vizAlpha != null || options.vizOut) {
+    config.visualization = config.visualization ?? {};
+    if (options.vizType) config.visualization.type = options.vizType;
+    if (options.vizAlpha != null) config.visualization.alpha = options.vizAlpha;
+    if (options.vizOut) config.visualization.outputPath = options.vizOut;
+    config.visualization.apply = true;
   }
   if (options.dryRun) {
     // eslint-disable-next-line no-console
@@ -250,24 +363,112 @@ async function run(): Promise<void> {
     );
     process.exit(0);
   }
-  const pipeline = new ImageFlowPipeline(config);
-  const result = await pipeline.run({
-    backend:
-      options.backend ?? (process.env.IMAGEFLOWIO_BACKEND as any) ?? "auto",
-    threads:
-      options.threads ??
-      (process.env.IMAGEFLOWIO_THREADS === "auto"
-        ? "auto"
-        : process.env.IMAGEFLOWIO_THREADS
-        ? Number(process.env.IMAGEFLOWIO_THREADS)
-        : undefined),
-  });
-  if (result.outputPath) {
+  // Batch: if input.source is a directory, process all images inside
+  const srcPath = path.resolve(process.cwd(), config.input?.source || "");
+  const isDir =
+    srcPath && fs.existsSync(srcPath) && fs.statSync(srcPath).isDirectory();
+  const backendOpt =
+    options.backend ?? (process.env.IMAGEFLOWIO_BACKEND as any) ?? "auto";
+  const threadsOpt =
+    options.threads ??
+    (process.env.IMAGEFLOWIO_THREADS === "auto"
+      ? "auto"
+      : process.env.IMAGEFLOWIO_THREADS
+      ? Number(process.env.IMAGEFLOWIO_THREADS)
+      : undefined);
+  if (isDir) {
+    const startedAt = Date.now();
+    const entries = fs
+      .readdirSync(srcPath)
+      .filter((f) => /\.(png|jpg|jpeg|webp|tif|tiff)$/i.test(f));
+    let saved = 0;
+    const items: Array<{ input: string; output?: string | null }> = [];
+    const limit = Math.max(1, Number((options as any).concurrency || 1));
+    let idx = 0;
+    const showProgress = !!(options as any).progress;
+    const total = entries.length;
+    let done = 0;
+    const processOne = async (file: string) => {
+      const cfg = JSON.parse(JSON.stringify(config));
+      cfg.input = cfg.input || { type: "image" };
+      cfg.input.source = path.join(srcPath, file);
+      const pipeline = new ImageFlowPipeline(cfg);
+      const result = await pipeline.run({
+        backend: backendOpt,
+        threads: threadsOpt,
+      });
+      if (result.outputPath) saved++;
+      items.push({
+        input: cfg.input.source,
+        output: result.outputPath || null,
+      });
+      done++;
+      if (showProgress && (done % 10 === 0 || done === total)) {
+        // eslint-disable-next-line no-console
+        console.log(`Progress: ${done}/${total}`);
+      }
+    };
+    const worker = async () => {
+      while (true) {
+        const i = idx++;
+        if (i >= entries.length) break;
+        const f = entries[i];
+        try {
+          await processOne(f);
+        } catch {}
+      }
+    };
+    const workers: Array<Promise<void>> = [];
+    for (let i = 0; i < Math.min(limit, entries.length); i++)
+      workers.push(worker());
+    await Promise.all(workers);
     // eslint-disable-next-line no-console
-    console.log(`Output saved to: ${result.outputPath}`);
+    console.log(`Processed ${entries.length} files. Saved: ${saved}.`);
+
+    // Write batch summary next to output path if available
+    try {
+      const outPathDir =
+        (config.output?.save?.path &&
+          path.resolve(process.cwd(), config.output.save.path)) ||
+        null;
+      const durationMs = Date.now() - startedAt;
+      const summary = {
+        ok: true,
+        processed: entries.length,
+        saved,
+        durationMs,
+        items,
+      };
+      const summaryJson = JSON.stringify(summary, null, 2);
+      if (outPathDir) {
+        if (!fs.existsSync(outPathDir))
+          fs.mkdirSync(outPathDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(outPathDir, "summary.json"),
+          summaryJson,
+          "utf-8"
+        );
+      } else {
+        fs.writeFileSync(
+          path.join(process.cwd(), `batch-summary-${Date.now()}.json`),
+          summaryJson,
+          "utf-8"
+        );
+      }
+    } catch {}
   } else {
-    // eslint-disable-next-line no-console
-    console.log("Pipeline completed with no file output.");
+    const pipeline = new ImageFlowPipeline(config);
+    const result = await pipeline.run({
+      backend: backendOpt,
+      threads: threadsOpt,
+    });
+    if (result.outputPath) {
+      // eslint-disable-next-line no-console
+      console.log(`Output saved to: ${result.outputPath}`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log("Pipeline completed with no file output.");
+    }
   }
 }
 

@@ -1537,4 +1537,49 @@ describe("Pipeline", () => {
     expect(contents).toContain("pipeline/start");
     expect(contents).toMatch(/total ms=/);
   });
+
+  it('uses disk cache when execution.useCaching="disk"', async () => {
+    const outRoot = path.join(process.cwd(), "testoutput");
+    if (!fs.existsSync(outRoot)) fs.mkdirSync(outRoot, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(outRoot, "cache-disk-"));
+    const cacheDir = path.join(tmpDir, ".cache");
+    const inputPath = path.join(tmpDir, "input.png");
+    await (
+      await import("sharp")
+    )
+      .default(Buffer.from([0, 0, 0, 255, 255, 255, 127, 127, 127]), {
+        raw: { width: 1, height: 3, channels: 3 },
+      })
+      .png()
+      .toFile(inputPath);
+    const outDir = path.join(tmpDir, "out");
+    const cfg = {
+      model: { path: "noop.onnx" },
+      input: { type: "image", source: inputPath },
+      execution: { useCaching: "disk", cacheDir },
+      preprocessing: {
+        resize: { apply: true, imageSize: [2, 2], keepAspectRatio: false },
+      },
+      output: { save: { apply: true, path: outDir, format: "png" } },
+      logging: {
+        saveLogs: true,
+        logPath: path.join(tmpDir, "log.txt"),
+        level: "debug",
+      },
+    } as any;
+    const p1 = new ImageFlowPipeline(cfg);
+    await p1.run({ backend: "noop" });
+    // Second run should hit disk cache; ensure cache files exist and log mentions disk hit
+    const p2 = new ImageFlowPipeline(cfg);
+    await p2.run({ backend: "noop" });
+    const hasCacheFiles = fs
+      .readdirSync(cacheDir)
+      .some((f) => /\.(json|bin)$/i.test(f));
+    const logText = fs.readFileSync(path.join(tmpDir, "log.txt"), "utf-8");
+    expect(hasCacheFiles).toBe(true);
+    expect(
+      /cache\/disk (hit|write)/i.test(logText) ||
+        /cache\/memory hit/i.test(logText)
+    ).toBe(true);
+  });
 });

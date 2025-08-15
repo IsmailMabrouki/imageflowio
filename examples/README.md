@@ -26,6 +26,34 @@ npm install onnxruntime-node
 imageflowio --config examples/onnx-unet.json --backend onnx --input examples/images/sample.png --output examples/outputs
 ```
 
+## onnx-advanced.json
+
+- Demonstrates advanced ONNX backend features including layout hints, input/output tensor names, and enhanced configuration.
+
+Run:
+
+```
+imageflowio --config examples/onnx-advanced.json --backend onnx --input examples/images/sample.png --output examples/outputs
+```
+
+Features demonstrated:
+
+- `model.layout: "nchw"` - hints tensor layout for automatic conversion
+- `model.inputName` and `model.outputName` - explicit tensor names
+- `execution.warmupRuns: 3` - performance stabilization
+- `execution.useCaching: "memory"` - preprocessing cache
+- `logging.level: "debug"` - detailed logging
+
+## onnx-io-names.json
+
+- Demonstrates providing explicit input/output tensor names for ONNX models.
+
+Run:
+
+```
+imageflowio --config examples/onnx-io-names.json --backend onnx --input examples/images/sample.png --output examples/outputs
+```
+
 ## palette-file.json
 
 - Demonstrates palette mapping from a JSON file and saving raw BIN output.
@@ -48,9 +76,27 @@ Create `examples/palette.json` containing an array of RGB triplets, e.g.:
 
 ## float32-raw.json
 
+- Demonstrates saving raw NPY with `dtype: "float32"`.
+
+Run:
+
+```
+imageflowio --config examples/float32-raw.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
+## npz-raw.json
+
+- Demonstrates saving raw output as NPZ (zip containing a single NPY array named `output`).
+
+Run:
+
+```
+imageflowio --config examples/npz-raw.json --backend noop --input examples/images/sample.png --output examples/outputs
+```
+
 ## tiling.json
 
-- Demonstrates tiled inference with overlap averaging.
+- Demonstrates tiled inference with overlap, padding and blend modes.
 
 Run:
 
@@ -66,14 +112,6 @@ Run:
 
 ```
 imageflowio --config examples/grayscale-float.json --backend noop --input examples/images/sample.png --output examples/outputs
-```
-
-- Demonstrates saving raw NPY with `dtype: "float32"`.
-
-Run:
-
-```
-imageflowio --config examples/float32-raw.json --backend noop --input examples/images/sample.png --output examples/outputs
 ```
 
 Notes:
@@ -93,10 +131,41 @@ imageflowio --config examples/viz-overlay.json --backend noop --input examples/i
 
 ## viz-heatmap.json
 
-- Demonstrates visualization heatmap (difference) between input and output.
+- Demonstrates visualization heatmap between input and output.
+  - You can override at runtime: `--viz heatmap --viz-out examples/outputs/viz`
 
 Run:
 
 ```
 imageflowio --config examples/viz-heatmap.json --backend noop --input examples/images/sample.png --output examples/outputs
 ```
+
+## tfjs.json
+
+- Demonstrates running with the TensorFlow.js backend (requires optional install).
+
+Setup:
+
+```
+npm install @tensorflow/tfjs-node
+# or (slower)
+npm install @tensorflow/tfjs
+```
+
+Then export or place a TFJS model under `examples/tfjs-model` (directory with `model.json` and weights), and run:
+
+```
+imageflowio --config examples/tfjs.json --backend tfjs --input examples/images/sample.png --output examples/outputs
+```
+
+## caching (memory/disk)
+
+- You can enable disk caching of preprocessing to speed up repeated runs on the same inputs:
+
+Run:
+
+```
+imageflowio --config examples/basic-noop.json --backend noop --input examples/images/sample.png --output examples/outputs --cache disk --cache-dir .imageflowio-cache
+```
+
+- Or set in config under `execution`: `{ "useCaching": "disk", "cacheDir": ".imageflowio-cache" }`.

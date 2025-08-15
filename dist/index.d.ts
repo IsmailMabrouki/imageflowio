@@ -3,15 +3,18 @@ interface ModelConfig {
     name?: string;
     path: string;
     layout?: "nhwc" | "nchw";
+    inputName?: string;
+    outputName?: string;
 }
 interface ExecutionConfig {
-    backend?: "auto" | "cpu" | "gpu" | "onnx" | "noop";
+    backend?: "auto" | "onnx" | "noop" | "tfjs";
     threads?: {
         apply?: boolean;
         count?: number | "auto";
     };
     warmupRuns?: number;
-    useCaching?: boolean;
+    useCaching?: boolean | "memory" | "disk";
+    cacheDir?: string;
 }
 interface InputConfig {
     type: "image";
@@ -135,7 +138,7 @@ interface SaveConfig {
     apply?: boolean;
     path?: string;
     format?: "png" | "jpeg" | "webp" | "tiff";
-    bitDepth?: 8 | 16 | 32;
+    bitDepth?: 1 | 2 | 4 | 8 | 16;
     colorSpace?: "srgb" | "linear";
     linearToSRGB?: boolean;
     splitChannels?: boolean;
@@ -146,6 +149,7 @@ interface SaveConfig {
 interface SaveRawConfig {
     apply?: boolean;
     format?: "npy" | "npz" | "bin";
+    dtype?: "uint8" | "float32";
     path?: string;
 }
 interface OutputConfig {
@@ -185,11 +189,12 @@ interface ImageFlowConfig {
 }
 
 type RunOptions = {
-    backend?: "auto" | "onnx" | "noop";
+    backend?: "auto" | "onnx" | "noop" | "tfjs";
     threads?: number | "auto";
 };
 declare class ImageFlowPipeline {
     private readonly config;
+    private static preprocCache;
     constructor(config: ImageFlowConfig);
     run(options?: RunOptions): Promise<{
         outputPath?: string;
@@ -202,6 +207,7 @@ interface InferenceInput {
     height: number;
     channels: number;
     layout?: "nhwc" | "nchw";
+    inputName?: string;
 }
 interface InferenceOutput {
     data: Float32Array;
@@ -209,10 +215,17 @@ interface InferenceOutput {
     height: number;
     channels: number;
     layout?: "nhwc" | "nchw";
+    outputName?: string;
+}
+interface BackendModelConfig {
+    path: string;
+    layout?: "nhwc" | "nchw";
+    inputName?: string;
+    outputName?: string;
 }
 interface InferenceBackend {
     name: string;
-    loadModel(modelPath: string): Promise<void>;
+    loadModel(config: BackendModelConfig): Promise<void>;
     infer(input: InferenceInput): Promise<InferenceOutput>;
     dispose?(): Promise<void> | void;
 }
@@ -228,10 +241,13 @@ declare class BackendLoadError extends ImageFlowError {
 }
 declare class InferenceError extends ImageFlowError {
 }
+declare class SaveError extends ImageFlowError {
+}
 
 declare class NoopBackend implements InferenceBackend {
     name: string;
-    loadModel(_modelPath: string): Promise<void>;
+    private modelConfig;
+    loadModel(config: BackendModelConfig): Promise<void>;
     infer(input: InferenceInput): Promise<InferenceOutput>;
 }
 
@@ -239,8 +255,19 @@ declare class OnnxBackend implements InferenceBackend {
     name: string;
     private session;
     private ort;
+    private modelConfig;
     private static sessionCache;
-    loadModel(modelPath: string): Promise<void>;
+    loadModel(config: BackendModelConfig): Promise<void>;
+    infer(input: InferenceInput): Promise<InferenceOutput>;
+    dispose(): Promise<void>;
+}
+
+declare class TfjsBackend implements InferenceBackend {
+    name: string;
+    private model;
+    private tf;
+    private modelConfig;
+    loadModel(config: BackendModelConfig): Promise<void>;
     infer(input: InferenceInput): Promise<InferenceOutput>;
     dispose(): Promise<void>;
 }
@@ -248,4 +275,4 @@ declare class OnnxBackend implements InferenceBackend {
 declare function nhwcToNchw(data: Float32Array, width: number, height: number, channels: number): Float32Array;
 declare function nchwToNhwc(data: Float32Array, width: number, height: number, channels: number): Float32Array;
 
-export { ActivationConfig, BackendLoadError, BlendOverlayConfig, CenterCropConfig, ClampConfig, ColorMapConfig, ConfigValidationError, CustomConfig, DenormalizeConfig, ExecutionConfig, FormatConfig, ImageFlowConfig, ImageFlowError, ImageFlowPipeline, InferenceBackend, InferenceConfig, InferenceError, InferenceInput, InferenceOutput, InputConfig, LoggingConfig, ModelConfig, NoopBackend, NormalizeConfig, OnnxBackend, OutputConfig, PaletteMapConfig, PipelineError, PostprocessingConfig, PreprocessingConfig, ResizeConfig, RunOptions, SaveConfig, SaveRawConfig, Size2, TilingConfig, ToneMapConfig, VisualizationConfig, nchwToNhwc, nhwcToNchw };
+export { ActivationConfig, BackendLoadError, BackendModelConfig, BlendOverlayConfig, CenterCropConfig, ClampConfig, ColorMapConfig, ConfigValidationError, CustomConfig, DenormalizeConfig, ExecutionConfig, FormatConfig, ImageFlowConfig, ImageFlowError, ImageFlowPipeline, InferenceBackend, InferenceConfig, InferenceError, InferenceInput, InferenceOutput, InputConfig, LoggingConfig, ModelConfig, NoopBackend, NormalizeConfig, OnnxBackend, OutputConfig, PaletteMapConfig, PipelineError, PostprocessingConfig, PreprocessingConfig, ResizeConfig, RunOptions, SaveConfig, SaveError, SaveRawConfig, Size2, TfjsBackend, TilingConfig, ToneMapConfig, VisualizationConfig, nchwToNhwc, nhwcToNchw };

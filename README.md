@@ -23,8 +23,8 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
 - Preprocessing
   - [x] Resize, center-crop, grayscale
   - [x] Normalize (mean/std) on float path
-  - [~] Channel order conversion (RGB/BGR) (uint8 path)
-  - [ ] Augmentations (flip, rotate, jitter)
+  - [x] Channel order conversion (RGB/BGR) on uint8 & float paths (incl. tiling)
+  - [x] Augmentations (flip, rotate, jitter)
 - Inference
   - [x] Backend adapter interface
   - [~] ONNX Runtime backend (autodetected; optional dep required)
@@ -37,31 +37,38 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
   - [x] Palette mapping + overlay blending
 - Output
   - [x] Save PNG/JPEG/WebP/TIFF
-  - [ ] Bit depth and color space handling (linear↔sRGB)
+  - [~] Bit depth and color space handling (linear↔sRGB)
   - [x] Save raw tensors (NPY) and metadata
   - [x] Split channels with optional channel names
 - Docs & DX
   - [x] docs/CONFIG.md & docs/CLI.md
-  - [ ] Examples/recipes and sample assets
+  - [x] Examples/recipes and sample assets
 - CI/Release
   - [x] Publish workflow
   - [ ] Tag-based publishing and versioning policy
+  - [ ] Hosted schema `$id` and governance files
 
 ### Documentation
 
-- Configuration reference and example: see `docs/CONFIG.md`
-- JSON Schema for validation/IDE autocompletion: `config.schema.json`
-- CLI usage: `docs/CLI.md`
-- Roadmap: `docs/ROADMAP.md`
-- Progress: `docs/PROGRESS.md`
-- Examples: `examples/README.md`
-- Developer Guide: `docs/DEVELOPMENT.md`
+- **Library Analysis**: [docs/ANALYSIS.md](docs/ANALYSIS.md) - Comprehensive overview of what ImageFlowIO does, benefits, target users, and improvement areas
+- Configuration reference and example: [docs/CONFIG.md](docs/CONFIG.md)
+- JSON Schema for validation/IDE autocompletion: [config.schema.json](config.schema.json)
+- CLI usage: [docs/CLI.md](docs/CLI.md)
+- Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+- Progress: [docs/PROGRESS.md](docs/PROGRESS.md)
+- Examples: [examples/README.md](examples/README.md)
+- Developer Guide: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- Improvements: [docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)
+- Advanced Features (experimental): [docs/Advanced-Features.md](docs/Advanced-Features.md)
+- Tensor Layouts: [docs/TENSOR_LAYOUT.md](docs/TENSOR_LAYOUT.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Errors and diagnostics: [docs/ERRORS.md](docs/ERRORS.md)
 
 ### Example config
 
 ```json
 {
-  "$schema": "./config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
   "model": { "name": "unet", "path": "./assets/models/unet.onnx" },
   "execution": {
     "backend": "auto",
@@ -112,6 +119,30 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
 imageflowio --config examples/basic-noop.json --backend noop --input examples/images/sample.png --output examples/outputs
 ```
 
+### Backends
+
+- ONNX Runtime Node (recommended for ONNX models)
+
+  - Install: `npm install onnxruntime-node`
+  - Use in config: `execution.backend: "onnx"`
+  - CLI: `--backend onnx`
+  - Auto-detection: when `model.path` ends with `.onnx`, `backend: "auto"` selects ONNX
+
+- TensorFlow.js (optional, preview)
+
+  - Install: `npm install @tensorflow/tfjs-node` (preferred) or `@tensorflow/tfjs`
+  - Use in config: `execution.backend: "tfjs"`
+  - CLI: `--backend tfjs`
+  - Expects TFJS Graph or Layers models saved to disk (e.g., directory containing `model.json` and weights)
+
+- Noop (preview pipeline without ML)
+  - Use in config: `execution.backend: "noop"`
+  - CLI: `--backend noop`
+
+Notes:
+
+- Set `model.layout` to `"nhwc" | "nchw"` to hint tensor layout; conversions are handled internally when possible. See `docs/TENSOR_LAYOUT.md`.
+
 ### CLI
 
 - Local dev:
@@ -127,11 +158,27 @@ imageflowio --config examples/basic-noop.json --backend noop --input examples/im
 
 ### Releasing
 
-- Patch: `npm version patch -m "chore: release v%s" && git push origin main --follow-tags`
-- Minor: `npm version minor -m "chore: release v%s" && git push origin main --follow-tags`
-- Major: `npm version major -m "chore: release v%s" && git push origin main --follow-tags`
+- Patch: `npm version patch -m "chore: release v%s"; git push origin main --follow-tags`
+- Minor: `npm version minor -m "chore: release v%s"; git push origin main --follow-tags`
+- Major: `npm version major -m "chore: release v%s"; git push origin main --follow-tags`
 
 Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` secret. See `docs/DEVELOPMENT.md`.
+
+### What's new in 0.0.4
+
+- Visualization: added `overlay` and `heatmap` modes; `--viz`, `--viz-alpha`, `--viz-out` CLI flags
+- Tiling: overlap blending (`average`, `feather`, `max`) and padding (`reflect`, `edge`, `zero`)
+- Preprocessing: augmentations (`flip`, `rotate`, `colorJitter`); robust RGB/BGR on uint8 and float paths (incl. tiling)
+- Postprocessing: tone mapping (ACES/Reinhard/Filmic), activation/clamp/denormalize improvements
+- Output: PNG/JPEG/WebP/TIFF; PNG (8/16-bit), TIFF (1/2/4/8-bit); raw tensor export (NPY/BIN/NPZ); metadata and logs
+- CLI/DX: Ajv 2020-12 metaschema support; `--print-schema`; environment overrides; Windows-friendly tests; `--progress` flag for batch processing
+- Backends: optional ONNX Runtime Node backend and preview TensorFlow.js backend, with enhanced interface supporting layout hints and input/output names
+- Utilities: `nhwcToNchw` / `nchwToNhwc` conversions exported
+- Packaging: dual CJS/ESM build via tsup; exports map
+- Docs/Examples/Tests: updated docs, added viz/tiling examples; expanded test suite (CLI, tiling, viz, logging, raw, ONNX integration)
+- New: `--errors json|pretty` for structured validation; batch mode writes `summary.json`; debug logs include tiling/viz markers and memory usage (when enabled)
+- Schema: Enhanced JSON Schema with comprehensive descriptions, examples, and default values for better IDE autocompletion
+- Docs: added [docs/ERRORS.md](docs/ERRORS.md) with error classes and diagnostics overview
 
 ### Feature support matrix (selected)
 
@@ -139,16 +186,25 @@ Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` s
 | -------------- | ------------------------------------------------- | ------- |
 | Preprocessing  | Resize, center-crop, grayscale                    | Done    |
 | Preprocessing  | Normalize (mean/std)                              | Done    |
-| Inference      | Noop backend, ONNX (optional)                     | Done    |
+| Inference      | Noop, ONNX (optional), TFJS (optional, preview)   | Partial |
+| Runtime        | Threads auto (cores), explicit threads            | Done    |
+| Caching        | Preprocess caching (memory/disk)                  | Done    |
+| Batch          | Multi-image processing (CLI) with progress        | Done    |
+| Output         | NPZ writer                                        | Done    |
 | Inference      | Tiled inference (overlap, blend modes, padding)   | Done    |
 | Postprocessing | Activation, clamp, denormalize (preview)          | Partial |
 | Postprocessing | Colormaps, palette mapping, overlay, tone mapping | Done    |
 | Output         | PNG/JPEG/WebP/TIFF save                           | Done    |
 | Output         | Split channels, raw NPY/BIN, metadata, logs       | Done    |
-| CLI/DX         | Validate/run, Ajv 2020-12, JSON errors            | Done    |
+| CLI/DX         | Validate/run, Ajv 2020-12, JSON errors, progress  | Done    |
 | Packaging/CI   | Dual build (CJS/ESM), CI matrix                   | Done    |
 | Visualization  | sideBySide, difference, overlay, heatmap          | Done    |
+| Backend API    | Enhanced interface (layout, input/output names)   | Done    |
+| Testing        | ONNX integration test (guarded)                   | Done    |
+| Testing        | TFJS integration test (guarded)                   | Done    |
+| Schema         | Enhanced descriptions, examples, defaults         | Done    |
+| Error Handling | Structured validation with detailed error paths   | Done    |
 
 ### License
 
-MIT — see `LICENSE`.
+MIT — see `

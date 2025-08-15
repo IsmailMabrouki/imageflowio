@@ -1,118 +1,292 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/IsmailMabrouki/imageflowio/config.schema.json",
+  "$id": "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
   "title": "ImageFlowIO Configuration",
+  "description": "Configuration file for ImageFlowIO image-to-image inference pipeline. Define your entire pipeline declaratively - from model loading and preprocessing to inference and output saving.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "$schema": {
       "type": "string",
-      "description": "JSON Schema URI for editor tooling."
+      "description": "JSON Schema URI for editor tooling and validation.",
+      "examples": [
+        "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json"
+      ]
     },
     "model": {
       "type": "object",
+      "title": "Model Configuration",
+      "description": "Configuration for the machine learning model to be used for inference.",
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string" },
-        "path": { "type": "string" },
-        "layout": { "type": "string", "enum": ["nhwc", "nchw"] }
+        "name": {
+          "type": "string",
+          "description": "Human-readable identifier for the model (e.g., 'unet', 'resnet50').",
+          "examples": ["unet", "resnet50", "deeplabv3"]
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the model file or directory. Supports ONNX (.onnx), TensorFlow.js (model.json directory), and other formats.",
+          "examples": [
+            "./models/unet.onnx",
+            "./models/tfjs-model/",
+            "https://example.com/model.onnx"
+          ]
+        },
+        "layout": {
+          "type": "string",
+          "enum": ["nhwc", "nchw"],
+          "description": "Tensor layout hint for the model. NHWC (batch, height, width, channels) is most common. NCHW (batch, channels, height, width) is used by some frameworks.",
+          "default": "nhwc"
+        },
+        "inputName": {
+          "type": "string",
+          "description": "Explicit input tensor name for models that require specific input names.",
+          "examples": ["input", "input_tensor", "images"]
+        },
+        "outputName": {
+          "type": "string",
+          "description": "Explicit output tensor name for models that have multiple outputs.",
+          "examples": ["output", "output_tensor", "predictions"]
+        }
       },
       "required": ["path"]
     },
     "execution": {
       "type": "object",
+      "title": "Execution Settings",
+      "description": "Runtime configuration for model execution and performance optimization.",
       "additionalProperties": false,
       "properties": {
-        "backend": { "type": "string", "enum": ["auto", "onnx", "noop"] },
+        "backend": {
+          "type": "string",
+          "enum": ["auto", "onnx", "noop", "tfjs"],
+          "description": "Execution backend selection. 'auto' chooses based on model path extension (.onnx → ONNX, model.json → TFJS). 'noop' runs preprocessing/postprocessing without inference.",
+          "default": "auto"
+        },
         "threads": {
           "type": "object",
+          "title": "Threading Configuration",
+          "description": "CPU threading controls for parallel processing.",
           "additionalProperties": false,
           "properties": {
-            "apply": { "type": "boolean" },
+            "apply": {
+              "type": "boolean",
+              "description": "Enable or disable multithreading.",
+              "default": false
+            },
             "count": {
               "oneOf": [
-                { "type": "string", "enum": ["auto"] },
-                { "type": "integer", "minimum": 1 }
-              ]
+                {
+                  "type": "string",
+                  "enum": ["auto"],
+                  "description": "Use all available CPU cores."
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Number of threads to use."
+                }
+              ],
+              "description": "Thread count. Use 'auto' for optimal performance or specify a number.",
+              "default": "auto"
             }
           }
         },
-        "warmupRuns": { "type": "integer", "minimum": 0 },
-        "useCaching": { "type": "boolean" }
+        "warmupRuns": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of warmup inference runs before timed execution. Helps stabilize performance measurements.",
+          "default": 0
+        },
+        "useCaching": {
+          "oneOf": [
+            {
+              "type": "boolean",
+              "description": "Enable/disable preprocessing caching."
+            },
+            {
+              "type": "string",
+              "enum": ["memory", "disk"],
+              "description": "Cache mode: 'memory' for in-memory cache, 'disk' for persistent cache."
+            }
+          ],
+          "description": "Cache preprocessed inputs to accelerate repeated inferences on the same images.",
+          "default": false
+        },
+        "cacheDir": {
+          "type": "string",
+          "description": "Directory for disk cache when useCaching is 'disk'. Defaults to '.imageflowio-cache'.",
+          "default": ".imageflowio-cache"
+        }
       }
     },
     "input": {
       "type": "object",
+      "title": "Input Configuration",
+      "description": "Configuration for input data sources.",
       "additionalProperties": false,
       "properties": {
-        "type": { "type": "string", "enum": ["image"] },
-        "source": { "type": "string" },
-        "batchSize": { "type": "integer", "minimum": 1 }
-      }
+        "type": {
+          "type": "string",
+          "enum": ["image"],
+          "description": "Input type. Currently only 'image' is supported.",
+          "default": "image"
+        },
+        "source": {
+          "type": "string",
+          "description": "Path to input image file or directory. If directory, processes all supported image files.",
+          "examples": [
+            "./images/sample.png",
+            "./input-dataset/",
+            "https://example.com/image.jpg"
+          ]
+        },
+        "batchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of images to process per batch. Currently only 1 is supported.",
+          "default": 1
+        }
+      },
+      "required": ["type", "source"]
     },
     "preprocessing": {
       "type": "object",
+      "title": "Preprocessing Configuration",
+      "description": "Image preprocessing steps applied before model inference. All steps are optional and controlled via 'apply' flags.",
       "additionalProperties": false,
       "properties": {
         "resize": {
           "type": "object",
+          "title": "Image Resizing",
+          "description": "Resize input images to specified dimensions.",
           "additionalProperties": false,
           "properties": {
-            "apply": { "type": "boolean" },
-            "imageSize": {
-              "$ref": "#/definitions/size2"
+            "apply": {
+              "type": "boolean",
+              "description": "Enable or disable image resizing.",
+              "default": false
             },
-            "keepAspectRatio": { "type": "boolean" },
-            "resizeMode": { "type": "string", "enum": ["fit", "fill", "crop"] }
+            "imageSize": {
+              "$ref": "#/definitions/size2",
+              "description": "Target image dimensions [width, height] in pixels."
+            },
+            "keepAspectRatio": {
+              "type": "boolean",
+              "description": "Maintain original aspect ratio when resizing. May add padding or cropping.",
+              "default": true
+            },
+            "resizeMode": {
+              "type": "string",
+              "enum": ["fit", "fill", "crop"],
+              "description": "Resize strategy when keeping aspect ratio: 'fit' (pad to fit), 'fill' (crop to fill), 'crop' (center crop).",
+              "default": "fit"
+            }
           }
         },
         "centerCrop": {
           "type": "object",
+          "title": "Center Cropping",
+          "description": "Extract a centered crop from the image.",
           "additionalProperties": false,
           "properties": {
-            "apply": { "type": "boolean" },
-            "size": { "$ref": "#/definitions/size2" }
+            "apply": {
+              "type": "boolean",
+              "description": "Enable or disable center cropping.",
+              "default": false
+            },
+            "size": {
+              "$ref": "#/definitions/size2",
+              "description": "Crop dimensions [width, height] in pixels."
+            }
           }
         },
         "normalize": {
           "type": "object",
+          "title": "Normalization",
+          "description": "Normalize pixel values using mean and standard deviation. Applied to float32 data.",
           "additionalProperties": false,
           "properties": {
-            "apply": { "type": "boolean" },
-            "mean": { "$ref": "#/definitions/vec3f" },
-            "std": { "$ref": "#/definitions/vec3f" }
+            "apply": {
+              "type": "boolean",
+              "description": "Enable or disable normalization.",
+              "default": false
+            },
+            "mean": {
+              "$ref": "#/definitions/vec3f",
+              "description": "Per-channel mean values for normalization. Common values: [0.485, 0.456, 0.406] (ImageNet), [0.5, 0.5, 0.5] (zero-centered)."
+            },
+            "std": {
+              "$ref": "#/definitions/vec3f",
+              "description": "Per-channel standard deviation values. Common values: [0.229, 0.224, 0.225] (ImageNet), [0.5, 0.5, 0.5] (zero-centered)."
+            }
           }
         },
         "format": {
           "type": "object",
+          "title": "Data Format",
+          "description": "Convert image data to specified format and data type.",
           "additionalProperties": false,
           "properties": {
             "dataType": {
               "type": "string",
-              "enum": ["float32", "float16", "int8", "uint8"]
+              "enum": ["float32", "float16", "int8", "uint8"],
+              "description": "Data type for tensor conversion. 'float32' is most common for ML models.",
+              "default": "float32"
             },
-            "channels": { "type": "integer", "minimum": 1 },
-            "channelOrder": { "type": "string", "enum": ["rgb", "bgr"] }
+            "channels": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "description": "Number of channels. 3 for RGB, 1 for grayscale, 4 for RGBA.",
+              "default": 3
+            },
+            "channelOrder": {
+              "type": "string",
+              "enum": ["rgb", "bgr"],
+              "description": "Channel ordering. 'rgb' is standard, 'bgr' is used by some frameworks (OpenCV).",
+              "default": "rgb"
+            }
           }
         },
         "grayscale": {
           "type": "object",
+          "title": "Grayscale Conversion",
+          "description": "Convert color images to grayscale.",
           "additionalProperties": false,
-          "properties": { "apply": { "type": "boolean" } }
+          "properties": {
+            "apply": {
+              "type": "boolean",
+              "description": "Enable or disable grayscale conversion.",
+              "default": false
+            }
+          }
         },
         "augmentations": {
           "type": "object",
+          "title": "Data Augmentations",
+          "description": "Apply data augmentations for training-like scenarios.",
           "additionalProperties": true,
           "properties": {
-            "apply": { "type": "boolean" },
+            "apply": {
+              "type": "boolean",
+              "description": "Enable or disable augmentations.",
+              "default": false
+            },
             "methods": {
               "type": "array",
+              "description": "List of augmentation methods to apply.",
               "items": {
                 "type": "string",
-                "enum": ["flip", "rotate", "colorJitter"]
+                "enum": ["flip", "rotate", "colorJitter"],
+                "description": "Augmentation method: 'flip' (horizontal/vertical), 'rotate' (90° increments), 'colorJitter' (brightness/saturation/hue)."
               }
             },
-            "params": { "type": "object" }
+            "params": {
+              "type": "object",
+              "description": "Method-specific parameters for augmentations."
+            }
           }
         }
       }
@@ -256,7 +430,8 @@
             "path": { "type": "string" },
             "format": {
               "type": "string",
-              "enum": ["png", "jpeg", "webp", "tiff"]
+              "enum": ["png", "jpeg", "webp", "tiff"],
+              "description": "Output image format"
             },
             "bitDepth": { "type": "integer", "enum": [1, 2, 4, 8, 16] },
             "colorSpace": { "type": "string", "enum": ["srgb", "linear"] },
@@ -272,7 +447,11 @@
           "additionalProperties": false,
           "properties": {
             "apply": { "type": "boolean" },
-            "format": { "type": "string", "enum": ["npy", "bin"] },
+            "format": {
+              "type": "string",
+              "enum": ["npy", "npz", "bin"],
+              "description": "Raw tensor format: NPY (NumPy), NPZ (zip of NPY), or BIN (raw bytes)"
+            },
             "dtype": { "type": "string", "enum": ["uint8", "float32"] },
             "path": { "type": "string" }
           }
@@ -311,7 +490,8 @@
         "apply": { "type": "boolean" },
         "type": {
           "type": "string",
-          "enum": ["sideBySide", "overlay", "heatmap", "difference"]
+          "enum": ["sideBySide", "overlay", "heatmap", "difference"],
+          "description": "Visualization mode to emit alongside outputs"
         },
         "outputPath": { "type": "string" },
         "alpha": { "type": "number", "minimum": 0, "maximum": 1 }

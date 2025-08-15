@@ -53,7 +53,7 @@ This document captures issues observed while using `imageflowio@0.0.1` and propo
   - `--dry-run` to validate and show an execution plan without writing files.
 
 - Logging
-  - Respect `logging.level` at runtime (implemented: debug/info/error filtering).
+  - Respect `logging.level` at runtime (implemented: debug/info/error filtering); add more debug markers for viz/tiling in future.
   - `--log-file` override supported and tested.
 
 ### Docs consistency
@@ -154,3 +154,8 @@ This document captures issues observed while using `imageflowio@0.0.1` and propo
   - Addressing the Ajv metaschema and `$schema` handling will eliminate first-run friction.
   - Aligning docs with implementation and adding a basic TFLite backend will unlock the DeepLabV3 use case.
   - Schema/CLI polish will improve developer experience significantly.
+
+### Recent additions
+
+- CLI error modes: Added `--errors json|pretty` (alias: `--json-errors`), with structured payloads containing `instancePath`, `schemaPath`, `keyword`, `message`, and `params`.
+- Batch mode summary: When `input.source` is a directory, a `summary.json` is written into `output.save.path` including `processed`, `saved`, `durationMs`, and per-file items.

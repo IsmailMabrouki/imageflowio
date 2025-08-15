@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/IsmailMabrouki/imageflowio/main/config.schema.json",
+  "model": {
+    "name": "advanced-onnx",
+    "path": "./assets/models/advanced-model.onnx",
+    "layout": "nchw",
+    "inputName": "input_tensor",
+    "outputName": "output_tensor"
+  },
+  "execution": {
+    "backend": "onnx",
+    "threads": { "apply": true, "count": "auto" },
+    "warmupRuns": 3,
+    "useCaching": "memory"
+  },
+  "input": {
+    "type": "image",
+    "source": "./images/sample.png"
+  },
+  "preprocessing": {
+    "resize": {
+      "apply": true,
+      "imageSize": [512, 512],
+      "keepAspectRatio": true,
+      "resizeMode": "fit"
+    },
+    "normalize": {
+      "apply": true,
+      "mean": [0.485, 0.456, 0.406],
+      "std": [0.229, 0.224, 0.225]
+    },
+    "format": {
+      "dataType": "float32",
+      "channels": 3,
+      "channelOrder": "rgb"
+    }
+  },
+  "inference": {
+    "batchSize": 1
+  },
+  "postprocessing": {
+    "denormalize": {
+      "apply": true,
+      "scale": 255,
+      "dtype": "uint8"
+    },
+    "resizeTo": "input"
+  },
+  "output": {
+    "save": {
+      "apply": true,
+      "path": "./outputs",
+      "format": "png",
+      "filename": "{model}_advanced_{timestamp}.png"
+    },
+    "writeMeta": {
+      "apply": true,
+      "jsonPath": "./outputs/meta.json"
+    }
+  },
+  "logging": {
+    "level": "debug",
+    "saveLogs": true,
+    "logPath": "./logs/advanced-inference.log"
+  }
+}

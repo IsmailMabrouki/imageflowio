@@ -14,22 +14,24 @@ A concise, actionable plan to evolve ImageFlowIO following library best practice
 ## 1) API & architecture
 
 - [x] Finalize public surface: export backends and types via `src/index.ts`
-- [ ] Stabilize backend adapter interface (`InferenceBackend`) and document tensor layout (NHWC/NCHW)
-- [ ] Introduce typed error classes (e.g., `ConfigError`, `InferenceError`)
+- [x] Stabilize backend adapter interface (`InferenceBackend`)
+- [x] Document tensor layout (NHWC/NCHW): see `docs/TENSOR_LAYOUT.md`
+- [x] Introduce typed error classes (`ConfigValidationError`, `BackendLoadError`, `InferenceError`, `SaveError`) — see `docs/ERRORS.md`
 
 ## 2) Preprocessing & postprocessing
 
 - [x] Normalize (mean/std) for float path; basic denormalize parity
-- [~] Channel order (RGB/BGR) (uint8 path today)
+- [x] Channel order (RGB/BGR)
 - [x] Color maps (grayscale, viridis, magma, plasma) and tone mapping (preview)
-- [ ] Tiling: split/overlap/blend for large images
+- [x] Tiling: split/overlap/blend for large images
+- [x] Disk/memory preprocess caching
 
 ## 3) Inference backends
 
 - [ ] ONNX Runtime Node backend (optional dependency)
   - Dynamic import; clear error if missing
   - Config: model layout hints, input/output names (optional)
-- [ ] TFJS/TFLite backend (optional) – WASM guidance in docs
+- [x] TFJS backend (optional, preview)
 - [ ] Backend selection: `execution.backend: auto|cpu|gpu` + model extension heuristics
 
 ## 4) Packaging
@@ -42,26 +44,31 @@ A concise, actionable plan to evolve ImageFlowIO following library best practice
 ## 5) CLI & DX
 
 - [x] `--backend` and `--threads` overrides
-- [ ] Structured validation error output (dataPath, schemaPath)
+- [x] `--errors` json|pretty; `--log-file`; `--log-level`
+- [x] Batch processing with `--concurrency` and `summary.json`
+- [x] `--cache` and `--cache-dir` for preprocess caching
 - [ ] Consider separate `@imageflowio/cli` package when API stabilizes
 
 ## 6) Testing
 
-- [ ] Unit: normalize/denormalize math, channel order, colorMap/blendOverlay
-- [ ] Integration: ONNX backend (guard via env + conditional install)
-- [ ] CI matrix: Node 18, 20; OS: ubuntu, windows, macos
+- [x] Unit/integration: CLI, pipeline, tiling, visualization, logging, raw export, augmentations
+- [x] Integration: ONNX backend (guard via env + conditional install)
+- [x] Integration: TFJS backend (guard via env + conditional install)
+- [x] CI matrix: Node 18, 20; OS: ubuntu, windows, macos
 
 ## 7) Docs
 
-- [ ] Feature support matrix (implemented vs planned)
-- [ ] Examples: `examples/basic/`, `examples/segmentation/deeplabv3/`
-- [ ] Host schema at a stable `$id` URL (e.g., GitHub Pages `schemas/config.schema.json`)
-- [ ] Windows notes for `sharp` and `onnxruntime-node`
+- [x] Feature support matrix (selected) in README
+- [x] Host schema at stable `$id` (raw.githubusercontent)
+- [x] Windows notes and CLI tips (`docs/USER_GUIDE.md`)
+- [x] Errors and diagnostics (`docs/ERRORS.md`)
+- [x] Enhanced JSON Schema with descriptions and examples
+- [x] Structured validation error output with detailed error paths
 
 ## 8) Release & governance
 
 - [ ] Tag-based publishing in CI (`on.push.tags: ["v*"]`)
-- [ ] Semantic versioning + changelog (Changesets or Release Please)
+- [ ] Semantic versioning + changelog automation
 - [ ] Add `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 
 ## 9) Security & quality
