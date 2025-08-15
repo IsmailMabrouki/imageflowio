@@ -27,24 +27,27 @@ Early stage. Configuration spec is documented; implementation is evolving. Expec
   - [x] Augmentations (flip, rotate, jitter)
 - Inference
   - [x] Backend adapter interface
-  - [~] ONNX Runtime backend (autodetected; optional dep required)
-  - [ ] TensorFlow.js backend
+  - [x] ONNX Runtime backend (autodetected; optional dep required)
+  - [x] TensorFlow.js backend (optional, preview)
 - Postprocessing
   - [x] Resize-to-input/fixed size
-  - [~] Activation (sigmoid/tanh), clamp, denormalize (preview on 8-bit)
+  - [x] Activation (sigmoid/tanh), clamp, denormalize
   - [x] Color maps (grayscale, viridis, magma, plasma)
-  - [~] Tone mapping (preview)
+  - [x] Tone mapping
   - [x] Palette mapping + overlay blending
 - Output
   - [x] Save PNG/JPEG/WebP/TIFF
-  - [~] Bit depth and color space handling (linear↔sRGB)
+  - [x] Bit depth and color space handling (linear↔sRGB)
   - [x] Save raw tensors (NPY) and metadata
   - [x] Split channels with optional channel names
 - Docs & DX
   - [x] docs/CONFIG.md & docs/CLI.md
   - [x] Examples/recipes and sample assets
+  - [x] Enhanced JSON Schema with descriptions and examples
+  - [x] Structured validation error output
 - CI/Release
   - [x] Publish workflow
+  - [x] CI matrix (Node 18/20, ubuntu/windows/macos)
   - [ ] Tag-based publishing and versioning policy
   - [ ] Hosted schema `$id` and governance files
 
@@ -164,6 +167,16 @@ Notes:
 
 Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` secret. See `docs/DEVELOPMENT.md`.
 
+### What's new in 0.0.6
+
+- Enhanced backend interface with layout hints and input/output names
+- Comprehensive integration tests for both ONNX and TFJS backends
+- Enhanced JSON Schema with descriptions, examples, and default values
+- Structured validation error output with detailed error paths
+- CLI progress updates for batch processing
+- Improved error handling and diagnostics
+- Comprehensive documentation updates
+
 ### What's new in 0.0.4
 
 - Visualization: added `overlay` and `heatmap` modes; `--viz`, `--viz-alpha`, `--viz-out` CLI flags
@@ -182,29 +195,29 @@ Pushing a tag starting with `v` triggers the publish workflow. Set `NPM_TOKEN` s
 
 ### Feature support matrix (selected)
 
-| Area           | Feature                                           | Status  |
-| -------------- | ------------------------------------------------- | ------- |
-| Preprocessing  | Resize, center-crop, grayscale                    | Done    |
-| Preprocessing  | Normalize (mean/std)                              | Done    |
-| Inference      | Noop, ONNX (optional), TFJS (optional, preview)   | Partial |
-| Runtime        | Threads auto (cores), explicit threads            | Done    |
-| Caching        | Preprocess caching (memory/disk)                  | Done    |
-| Batch          | Multi-image processing (CLI) with progress        | Done    |
-| Output         | NPZ writer                                        | Done    |
-| Inference      | Tiled inference (overlap, blend modes, padding)   | Done    |
-| Postprocessing | Activation, clamp, denormalize (preview)          | Partial |
-| Postprocessing | Colormaps, palette mapping, overlay, tone mapping | Done    |
-| Output         | PNG/JPEG/WebP/TIFF save                           | Done    |
-| Output         | Split channels, raw NPY/BIN, metadata, logs       | Done    |
-| CLI/DX         | Validate/run, Ajv 2020-12, JSON errors, progress  | Done    |
-| Packaging/CI   | Dual build (CJS/ESM), CI matrix                   | Done    |
-| Visualization  | sideBySide, difference, overlay, heatmap          | Done    |
-| Backend API    | Enhanced interface (layout, input/output names)   | Done    |
-| Testing        | ONNX integration test (guarded)                   | Done    |
-| Testing        | TFJS integration test (guarded)                   | Done    |
-| Schema         | Enhanced descriptions, examples, defaults         | Done    |
-| Error Handling | Structured validation with detailed error paths   | Done    |
+| Area           | Feature                                           | Status |
+| -------------- | ------------------------------------------------- | ------ |
+| Preprocessing  | Resize, center-crop, grayscale                    | Done   |
+| Preprocessing  | Normalize (mean/std)                              | Done   |
+| Inference      | Noop, ONNX (optional), TFJS (optional, preview)   | Done   |
+| Runtime        | Threads auto (cores), explicit threads            | Done   |
+| Caching        | Preprocess caching (memory/disk)                  | Done   |
+| Batch          | Multi-image processing (CLI) with progress        | Done   |
+| Output         | NPZ writer                                        | Done   |
+| Inference      | Tiled inference (overlap, blend modes, padding)   | Done   |
+| Postprocessing | Activation, clamp, denormalize                    | Done   |
+| Postprocessing | Colormaps, palette mapping, overlay, tone mapping | Done   |
+| Output         | PNG/JPEG/WebP/TIFF save                           | Done   |
+| Output         | Split channels, raw NPY/BIN, metadata, logs       | Done   |
+| CLI/DX         | Validate/run, Ajv 2020-12, JSON errors, progress  | Done   |
+| Packaging/CI   | Dual build (CJS/ESM), CI matrix                   | Done   |
+| Visualization  | sideBySide, difference, overlay, heatmap          | Done   |
+| Backend API    | Enhanced interface (layout, input/output names)   | Done   |
+| Testing        | ONNX integration test (guarded)                   | Done   |
+| Testing        | TFJS integration test (guarded)                   | Done   |
+| Schema         | Enhanced descriptions, examples, defaults         | Done   |
+| Error Handling | Structured validation with detailed error paths   | Done   |
 
 ### License
 
-MIT — see `
+MIT — see [LICENSE](LICENSE).

@@ -1,5 +1,17 @@
 ## Changelog
 
+### 0.0.6
+
+Highlights:
+
+- Enhanced backend interface with layout hints and input/output names
+- Comprehensive integration tests for both ONNX and TFJS backends
+- Enhanced JSON Schema with descriptions, examples, and default values
+- Structured validation error output with detailed error paths
+- CLI progress updates for batch processing
+- Improved error handling and diagnostics
+- Comprehensive documentation updates
+
 ### 0.0.4
 
 Highlights:
