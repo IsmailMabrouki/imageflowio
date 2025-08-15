@@ -1,0 +1,304 @@
+{
+  "benchmark": {
+    "name": "ImageFlowIO Performance Benchmark",
+    "timestamp": "2025-08-15T17:13:01.757Z",
+    "environment": {
+      "nodeVersion": "v20.17.0",
+      "platform": "win32",
+      "architecture": "x64",
+      "cpuCores": 8,
+      "memoryGB": 24,
+      "uptime": 1.226816
+    },
+    "results": [
+      {
+        "name": "resnet50-onnx-224x224",
+        "iterations": 5,
+        "totalTime": 60.03660000000002,
+        "averageTime": 9.410699999999997,
+        "minTime": 1.1089000000000055,
+        "maxTime": 16.69379999999998,
+        "throughput": 83.28253098942976,
+        "memoryUsage": {
+          "heapUsed": 288368,
+          "heapTotal": 11493376,
+          "external": 1842969,
+          "rss": 43061248,
+          "peak": 8180568
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:00.814Z"
+      },
+      {
+        "name": "resnet50-onnx-512x512",
+        "iterations": 5,
+        "totalTime": 82.55430000000001,
+        "averageTime": 14.496160000000009,
+        "minTime": 2.755800000000022,
+        "maxTime": 25.082300000000032,
+        "throughput": 60.56619703637484,
+        "memoryUsage": {
+          "heapUsed": 228192,
+          "heapTotal": 11665408,
+          "external": 1842969,
+          "rss": 43540480,
+          "peak": 8420432
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:00.907Z"
+      },
+      {
+        "name": "resnet50-tfjs-224x224",
+        "iterations": 5,
+        "totalTime": 76.28050000000002,
+        "averageTime": 13.447199999999999,
+        "minTime": 10.501999999999953,
+        "maxTime": 15.387200000000007,
+        "throughput": 65.54755147121477,
+        "memoryUsage": {
+          "heapUsed": 63560,
+          "heapTotal": 11665408,
+          "external": 1842969,
+          "rss": 43560960,
+          "peak": 8492000
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:00.990Z"
+      },
+      {
+        "name": "resnet50-tfjs-512x512",
+        "iterations": 5,
+        "totalTime": 92.90460000000002,
+        "averageTime": 16.187139999999964,
+        "minTime": 14.55219999999997,
+        "maxTime": 17.422699999999963,
+        "throughput": 53.81864837693719,
+        "memoryUsage": {
+          "heapUsed": 63352,
+          "heapTotal": 11665408,
+          "external": 1842969,
+          "rss": 43569152,
+          "peak": 8563576
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.090Z"
+      },
+      {
+        "name": "resnet50-noop-224x224",
+        "iterations": 5,
+        "totalTime": 91.23209999999995,
+        "averageTime": 13.107259999999997,
+        "minTime": 3.2111999999999625,
+        "maxTime": 15.930200000000013,
+        "throughput": 54.80527139022343,
+        "memoryUsage": {
+          "heapUsed": 63384,
+          "heapTotal": 11665408,
+          "external": 1842969,
+          "rss": 43581440,
+          "peak": 8635016
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.191Z"
+      },
+      {
+        "name": "resnet50-noop-512x512",
+        "iterations": 5,
+        "totalTime": 89.95360000000005,
+        "averageTime": 13.462280000000032,
+        "minTime": 3.4767000000000507,
+        "maxTime": 16.705400000000054,
+        "throughput": 55.58421230501055,
+        "memoryUsage": {
+          "heapUsed": 64088,
+          "heapTotal": 11665408,
+          "external": 1842969,
+          "rss": 43610112,
+          "peak": 8706968
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 16000,
+          "total": 16000,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.290Z"
+      },
+      {
+        "name": "mobilenet-onnx-224x224",
+        "iterations": 5,
+        "totalTime": 69.90960000000007,
+        "averageTime": 8.805660000000035,
+        "minTime": 1.2361000000000786,
+        "maxTime": 14.888199999999983,
+        "throughput": 71.52093560827117,
+        "memoryUsage": {
+          "heapUsed": -1307248,
+          "heapTotal": 11927552,
+          "external": 1842969,
+          "rss": 43790336,
+          "peak": 8716520
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.372Z"
+      },
+      {
+        "name": "mobilenet-onnx-512x512",
+        "iterations": 5,
+        "totalTime": 84.77980000000002,
+        "averageTime": 14.266359999999986,
+        "minTime": 10.732200000000034,
+        "maxTime": 19.4923,
+        "throughput": 58.97631275374557,
+        "memoryUsage": {
+          "heapUsed": 63080,
+          "heapTotal": 11927552,
+          "external": 1842969,
+          "rss": 43823104,
+          "peak": 7480312
+        },
+        "cpuUsage": {
+          "user": 15000,
+          "system": 0,
+          "total": 15000,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.465Z"
+      },
+      {
+        "name": "mobilenet-tfjs-224x224",
+        "iterations": 5,
+        "totalTime": 64.19979999999998,
+        "averageTime": 9.697800000000006,
+        "minTime": 2.1082999999999856,
+        "maxTime": 17.47829999999999,
+        "throughput": 77.88186256031952,
+        "memoryUsage": {
+          "heapUsed": 63040,
+          "heapTotal": 11927552,
+          "external": 1842969,
+          "rss": 43823104,
+          "peak": 7551736
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.541Z"
+      },
+      {
+        "name": "mobilenet-tfjs-512x512",
+        "iterations": 5,
+        "totalTime": 77.34509999999989,
+        "averageTime": 10.01633999999999,
+        "minTime": 3.2233000000001084,
+        "maxTime": 16.13429999999994,
+        "throughput": 64.64533629150401,
+        "memoryUsage": {
+          "heapUsed": 63040,
+          "heapTotal": 11927552,
+          "external": 1842969,
+          "rss": 43823104,
+          "peak": 7623040
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.626Z"
+      },
+      {
+        "name": "mobilenet-noop-224x224",
+        "iterations": 5,
+        "totalTime": 58.8764000000001,
+        "averageTime": 7.129020000000037,
+        "minTime": 2.7725000000000364,
+        "maxTime": 13.455500000000029,
+        "throughput": 84.92367060486019,
+        "memoryUsage": {
+          "heapUsed": 63040,
+          "heapTotal": 11927552,
+          "external": 1842969,
+          "rss": 43823104,
+          "peak": 7694472
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 16000,
+          "total": 16000,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.692Z"
+      },
+      {
+        "name": "mobilenet-noop-512x512",
+        "iterations": 5,
+        "totalTime": 56.9221,
+        "averageTime": 9.289900000000035,
+        "minTime": 2.3940999999999804,
+        "maxTime": 14.574200000000019,
+        "throughput": 87.83934535092696,
+        "memoryUsage": {
+          "heapUsed": 65992,
+          "heapTotal": 11927552,
+          "external": 1842969,
+          "rss": 43835392,
+          "peak": 7768728
+        },
+        "cpuUsage": {
+          "user": 0,
+          "system": 0,
+          "total": 0,
+          "cores": 8
+        },
+        "errors": [],
+        "timestamp": "2025-08-15T17:13:01.756Z"
+      }
+    ]
+  }
+}

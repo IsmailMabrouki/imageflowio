@@ -1,0 +1,54 @@
+{
+  "suites": {
+    "backend-comparison": {
+      "enabled": true,
+      "iterations": 100,
+      "warmupRuns": 10,
+      "timeout": 30000,
+      "models": ["resnet50", "mobilenet"],
+      "backends": ["onnx", "tfjs", "noop"],
+      "imageSizes": [
+        [224, 224],
+        [512, 512]
+      ]
+    },
+    "pipeline-performance": {
+      "enabled": true,
+      "iterations": 50,
+      "warmupRuns": 5,
+      "preprocessing": {
+        "resize": [224, 224],
+        "normalize": true,
+        "augment": false
+      },
+      "postprocessing": {
+        "activation": "sigmoid",
+        "colormap": "viridis"
+      }
+    },
+    "memory-usage": {
+      "enabled": true,
+      "iterations": 20,
+      "memoryThreshold": 1000000000,
+      "gcInterval": 5
+    },
+    "scalability": {
+      "enabled": true,
+      "batchSizes": [1, 4, 8, 16],
+      "concurrentPipelines": [1, 2, 4],
+      "imageSizes": [1024, 2048]
+    }
+  },
+  "output": {
+    "format": "json",
+    "path": "./benchmark-results",
+    "includeCharts": true,
+    "includeRawData": true
+  },
+  "environment": {
+    "nodeVersion": "18.0.0",
+    "platform": "linux",
+    "cpuCores": 8,
+    "memoryGB": 16
+  }
+}

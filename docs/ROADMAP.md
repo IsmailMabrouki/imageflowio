@@ -77,7 +77,34 @@ A concise, actionable plan to evolve ImageFlowIO following library best practice
 - [ ] Linting (ESLint) + formatting (Prettier)
 - [ ] Source maps in published bundle
 
-## 10) Ecosystem Integrations
+## 10) Performance Benchmarking
+
+### Core Benchmarking Infrastructure
+
+- [x] Benchmark runner with metrics collection (memory, CPU, throughput)
+- [x] Backend comparison suite (ONNX vs TFJS vs Noop)
+- [x] Pipeline performance testing (preprocessing, postprocessing)
+- [x] CLI integration for benchmark commands
+- [x] Report generation (JSON, HTML, CSV)
+
+### Advanced Benchmarking Features
+
+- [ ] Memory usage profiling and leak detection
+- [ ] Scalability testing (batch sizes, concurrent operations)
+- [ ] Continuous benchmarking in CI/CD
+- [ ] Performance regression detection
+- [ ] Interactive benchmark dashboard
+- [ ] Cloud benchmarking across different environments
+
+### Benchmark Suites
+
+- [ ] Model-specific benchmarks (ResNet, MobileNet, UNet, YOLO)
+- [ ] Tiling performance benchmarks
+- [ ] Caching effectiveness benchmarks
+- [ ] I/O performance benchmarks
+- [ ] GPU utilization benchmarks (when available)
+
+## 11) Ecosystem Integrations
 
 ### Phase 1: Core Framework Integrations
 

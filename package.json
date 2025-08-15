@@ -12,7 +12,11 @@
     "build": "tsup src/index.ts src/cli.ts --dts --format cjs,esm --sourcemap --out-dir dist --clean",
     "dev": "tsc -w",
     "test": "npm run build; vitest run --reporter=dot",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "benchmark": "npm run build; node dist/cli.js benchmark",
+    "benchmark:backend": "npm run build; node dist/cli.js benchmark --benchmark-type backend",
+    "benchmark:pipeline": "npm run build; node dist/cli.js benchmark --benchmark-type pipeline",
+    "benchmark:all": "npm run build; node dist/cli.js benchmark --benchmark-type all --benchmark-format html"
   },
   "keywords": [
     "image",

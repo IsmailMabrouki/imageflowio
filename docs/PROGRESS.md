@@ -90,6 +90,23 @@ Last updated: today
 - Implemented: TFJS integration test behind env guard (skips gracefully when dependency not available).
 - Planned: None - comprehensive test coverage achieved.
 
+### Performance Benchmarking
+
+- Implemented:
+  - Benchmark runner with comprehensive metrics collection (memory, CPU, throughput, latency)
+  - Backend comparison suite for ONNX vs TFJS vs Noop performance testing
+  - Pipeline performance testing (preprocessing, postprocessing operations)
+  - CLI integration with benchmark commands and configuration options
+  - Report generation in multiple formats (JSON, HTML with charts, CSV)
+  - Default benchmark configuration file
+- Planned:
+  - Memory usage profiling and leak detection
+  - Scalability testing (batch sizes, concurrent operations)
+  - Continuous benchmarking in CI/CD pipeline
+  - Performance regression detection and alerts
+  - Interactive benchmark dashboard
+  - Model-specific benchmark suites
+
 ### Ecosystem Integrations
 
 - Implemented: None - currently a standalone library.

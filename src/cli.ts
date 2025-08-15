@@ -36,6 +36,14 @@ type CliOptions = {
   concurrency?: number;
   progress?: boolean;
   help: boolean;
+  // Benchmark options
+  benchmark?: boolean;
+  benchmarkType?: "backend" | "pipeline" | "memory" | "scalability" | "all";
+  benchmarkConfig?: string;
+  benchmarkOutput?: string;
+  benchmarkFormat?: "json" | "html" | "csv";
+  benchmarkIterations?: number;
+  benchmarkWarmup?: number;
 };
 
 function parseArgs(argv: string[]): CliOptions {
@@ -152,6 +160,58 @@ function parseArgs(argv: string[]): CliOptions {
       const next = args.shift();
       if (next) defaults.configPath = next;
     }
+    // Benchmark options
+    else if (token === "benchmark" || token === "--benchmark") {
+      defaults.benchmark = true;
+    } else if (token.startsWith("--benchmark-type=")) {
+      const val = token.split("=")[1] as any;
+      if (
+        val === "backend" ||
+        val === "pipeline" ||
+        val === "memory" ||
+        val === "scalability" ||
+        val === "all"
+      )
+        defaults.benchmarkType = val;
+    } else if (token === "--benchmark-type") {
+      const val = args.shift() as any;
+      if (
+        val === "backend" ||
+        val === "pipeline" ||
+        val === "memory" ||
+        val === "scalability" ||
+        val === "all"
+      )
+        defaults.benchmarkType = val;
+    } else if (token.startsWith("--benchmark-config=")) {
+      defaults.benchmarkConfig = token.split("=")[1];
+    } else if (token === "--benchmark-config") {
+      defaults.benchmarkConfig = args.shift();
+    } else if (token.startsWith("--benchmark-output=")) {
+      defaults.benchmarkOutput = token.split("=")[1];
+    } else if (token === "--benchmark-output") {
+      defaults.benchmarkOutput = args.shift();
+    } else if (token.startsWith("--benchmark-format=")) {
+      const val = token.split("=")[1] as any;
+      if (val === "json" || val === "html" || val === "csv")
+        defaults.benchmarkFormat = val;
+    } else if (token === "--benchmark-format") {
+      const val = args.shift() as any;
+      if (val === "json" || val === "html" || val === "csv")
+        defaults.benchmarkFormat = val;
+    } else if (token.startsWith("--benchmark-iterations=")) {
+      const val = Number(token.split("=")[1]);
+      if (!Number.isNaN(val) && val > 0) defaults.benchmarkIterations = val;
+    } else if (token === "--benchmark-iterations") {
+      const val = Number(args.shift());
+      if (!Number.isNaN(val) && val > 0) defaults.benchmarkIterations = val;
+    } else if (token.startsWith("--benchmark-warmup=")) {
+      const val = Number(token.split("=")[1]);
+      if (!Number.isNaN(val) && val >= 0) defaults.benchmarkWarmup = val;
+    } else if (token === "--benchmark-warmup") {
+      const val = Number(args.shift());
+      if (!Number.isNaN(val) && val >= 0) defaults.benchmarkWarmup = val;
+    }
   }
   return defaults;
 }
@@ -162,6 +222,7 @@ ImageFlowIO CLI
 
 Usage:
   imageflowio --config <path/to/config.json> [--validate-only] [--verbose]
+  imageflowio benchmark [--benchmark-type <type>] [options]
 
 Options:
   -c, --config         Path to config.json (default: ./config.json)
@@ -183,6 +244,16 @@ Options:
       --viz-out <dir>  Visualization output directory
       --dry-run        Validate and print plan only
       --print-schema   Print packaged schema path
+
+Benchmark Commands:
+  benchmark            Run performance benchmarks
+      --benchmark-type <type>  Benchmark type: backend|pipeline|memory|scalability|all
+      --benchmark-config <path>  Path to benchmark configuration file
+      --benchmark-output <path>  Output path for benchmark results
+      --benchmark-format <fmt>  Output format: json|html|csv (default: json)
+      --benchmark-iterations <n>  Number of benchmark iterations (default: 100)
+      --benchmark-warmup <n>  Number of warmup runs (default: 10)
+
   -h, --help           Show this help
 `;
   // eslint-disable-next-line no-console
@@ -252,6 +323,76 @@ async function validateConfig(
   return { valid: true, errors: [] };
 }
 
+async function runBenchmarks(options: CliOptions): Promise<void> {
+  try {
+    // Import benchmark suite
+    const { BackendComparisonSuite } = await import('./benchmark/suites/backend-comparison.js');
+    
+    const suite = new BackendComparisonSuite();
+    const benchmarkType = options.benchmarkType || 'backend';
+    const iterations = options.benchmarkIterations || 100;
+    const warmup = options.benchmarkWarmup || 10;
+    const format = options.benchmarkFormat || 'json';
+    const outputPath = options.benchmarkOutput || `./benchmark-results-${Date.now()}.${format}`;
+
+    console.log(`Running ${benchmarkType} benchmarks...`);
+    console.log(`Iterations: ${iterations}, Warmup: ${warmup}, Format: ${format}`);
+
+    let results: any[] = [];
+
+    switch (benchmarkType) {
+      case 'backend':
+        results = await suite.runClassificationBenchmarks({
+          models: ['resnet50', 'mobilenet'],
+          backends: ['onnx', 'tfjs', 'noop'],
+          imageSizes: [[224, 224], [512, 512]],
+          iterations,
+          warmupRuns: warmup
+        });
+        break;
+      
+      case 'pipeline':
+        results = await suite.runPreprocessingBenchmarks();
+        break;
+      
+      case 'all':
+        const backendResults = await suite.runClassificationBenchmarks({
+          models: ['resnet50', 'mobilenet'],
+          backends: ['onnx', 'tfjs', 'noop'],
+          imageSizes: [[224, 224], [512, 512]],
+          iterations,
+          warmupRuns: warmup
+        });
+        const pipelineResults = await suite.runPreprocessingBenchmarks();
+        results = [...backendResults, ...pipelineResults];
+        break;
+      
+      default:
+        console.error(`Unknown benchmark type: ${benchmarkType}`);
+        process.exit(1);
+    }
+
+    // Generate report
+    const report = await suite.generateComparisonReport(results, {
+      format: format as 'json' | 'html' | 'csv',
+      outputPath
+    });
+
+    console.log(`Benchmark completed. Results saved to: ${outputPath}`);
+    
+    if (format === 'json') {
+      console.log('\nSummary:');
+      results.forEach(result => {
+        console.log(`${result.name}: ${result.throughput.toFixed(2)} ops/sec, ${result.averageTime.toFixed(2)}ms avg`);
+      });
+    }
+
+  } catch (error) {
+    console.error('Benchmark failed:', error);
+    process.exit(1);
+  }
+}
+
 async function run(): Promise<void> {
   const options = parseArgs(process.argv);
   if (options.help) {
@@ -271,6 +412,12 @@ async function run(): Promise<void> {
     const schemaPath = path.resolve(here, "../config.schema.json");
     // eslint-disable-next-line no-console
     console.log(schemaPath);
+    process.exit(0);
+  }
+
+  // Handle benchmark commands
+  if (options.benchmark) {
+    await runBenchmarks(options);
     process.exit(0);
   }
 
